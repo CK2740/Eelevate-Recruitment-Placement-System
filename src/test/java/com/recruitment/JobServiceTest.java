@@ -3,6 +3,7 @@ package com.recruitment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -41,11 +42,11 @@ class JobServiceTest {
     @Test
     void createsJobLinkedToExistingCompany() {
         when(jobDao.companyExists(3)).thenReturn(true);
-        when(jobDao.insert(any(JobRequest.class))).thenReturn(8L);
+        when(jobDao.insert(any(JobRequest.class), anyLong())).thenReturn(8L);
         when(jobDao.findById(8)).thenReturn(job(8));
 
-        assertEquals(job(8), jobService.create(request()));
-        verify(jobDao).insert(request());
+        assertEquals(job(8), jobService.create(request(), 7));
+        verify(jobDao).insert(request(), 7);
     }
 
     @Test
@@ -54,10 +55,10 @@ class JobServiceTest {
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
-                () -> jobService.create(request()));
+                () -> jobService.create(request(), 7));
 
         assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
-        verify(jobDao, never()).insert(any());
+        verify(jobDao, never()).insert(any(), anyLong());
     }
 
     @Test
@@ -141,6 +142,7 @@ class JobServiceTest {
                 new BigDecimal("85000.00"),
                 "Build backend systems",
                 "Java, SQL",
+                "Computer Science",
                 LocalDate.now().plusDays(30),
                 EmploymentType.FULL_TIME,
                 JobStatus.OPEN,
@@ -160,6 +162,7 @@ class JobServiceTest {
                 new BigDecimal("85000.00"),
                 "Build backend systems",
                 "Java, SQL",
+                "Computer Science",
                 LocalDate.of(2026, 12, 1),
                 EmploymentType.FULL_TIME,
                 JobStatus.OPEN,

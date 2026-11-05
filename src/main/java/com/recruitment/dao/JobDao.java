@@ -23,7 +23,8 @@ public class JobDao {
 
     private static final String JOB_COLUMNS = """
             j.job_id, j.company_id, c.company_name, j.job_title, j.technology, j.openings,
-            j.location, j.package_amount, j.job_description, j.skills, j.application_deadline,
+            j.location, j.package_amount, j.job_description, j.skills, j.required_qualification,
+            j.application_deadline,
             j.employment_type, j.status, ec.minimum_percentage, ec.minimum_passing_year,
             ec.maximum_passing_year, ec.maximum_backlogs, j.created_at, j.updated_at
             """;
@@ -57,6 +58,7 @@ public class JobDao {
                         resultSet.getBigDecimal("package_amount"),
                         resultSet.getString("job_description"),
                         resultSet.getString("skills"),
+                        resultSet.getString("required_qualification"),
                         deadline.toLocalDate(),
                         EmploymentType.valueOf(resultSet.getString("employment_type")),
                         JobStatus.valueOf(resultSet.getString("status")),
@@ -160,16 +162,17 @@ public class JobDao {
         return companyCount != null && companyCount > 0;
     }
 
-    public long insert(JobRequest request) {
+    public long insert(JobRequest request, long createdByUserId) {
         KeyHolder keyHolder = new GeneratedKeyHolder();
         jdbcTemplate.update(connection -> {
             var statement = connection.prepareStatement("""
                     INSERT INTO jobs (
                         company_id, job_title, technology, openings, location, package_amount,
-                        job_description, skills, application_deadline, employment_type, status
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        job_description, skills, required_qualification, application_deadline,
+                        employment_type, status, created_by_user_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, Statement.RETURN_GENERATED_KEYS);
-            setJobParameters(statement, request);
+            setJobParameters(statement, request, createdByUserId);
             return statement;
         }, keyHolder);
         Number key = keyHolder.getKey();
@@ -184,8 +187,8 @@ public class JobDao {
         int updated = jdbcTemplate.update("""
                 UPDATE jobs
                 SET company_id = ?, job_title = ?, technology = ?, openings = ?, location = ?,
-                    package_amount = ?, job_description = ?, skills = ?, application_deadline = ?,
-                    employment_type = ?, status = COALESCE(?, status)
+                    package_amount = ?, job_description = ?, skills = ?, required_qualification = ?,
+                    application_deadline = ?, employment_type = ?, status = COALESCE(?, status)
                 WHERE job_id = ?
                 """,
                 request.companyId(),
@@ -196,6 +199,7 @@ public class JobDao {
                 request.packageAmount(),
                 normalize(request.jobDescription()),
                 normalize(request.skills()),
+                normalize(request.requiredQualification()),
                 Date.valueOf(request.applicationDeadline()),
                 request.employmentType().name(),
                 request.status() == null ? null : request.status().name(),
@@ -250,7 +254,8 @@ public class JobDao {
 
     private static void setJobParameters(
             java.sql.PreparedStatement statement,
-            JobRequest request) throws java.sql.SQLException {
+            JobRequest request,
+            long createdByUserId) throws java.sql.SQLException {
         statement.setLong(1, request.companyId());
         statement.setString(2, normalize(request.jobTitle()));
         statement.setString(3, normalize(request.technology()));
@@ -259,11 +264,13 @@ public class JobDao {
         statement.setBigDecimal(6, request.packageAmount());
         statement.setString(7, normalize(request.jobDescription()));
         statement.setString(8, normalize(request.skills()));
-        statement.setDate(9, Date.valueOf(request.applicationDeadline()));
-        statement.setString(10, request.employmentType().name());
-        statement.setString(11, request.status() == null
+        statement.setString(9, normalize(request.requiredQualification()));
+        statement.setDate(10, Date.valueOf(request.applicationDeadline()));
+        statement.setString(11, request.employmentType().name());
+        statement.setString(12, request.status() == null
                 ? JobStatus.DRAFT.name()
                 : request.status().name());
+        statement.setLong(13, createdByUserId);
     }
 
     private static void addLikeFilter(

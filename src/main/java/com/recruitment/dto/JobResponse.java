@@ -15,6 +15,7 @@ public record JobResponse(
         BigDecimal packageAmount,
         String jobDescription,
         String skills,
+        String requiredQualification,
         LocalDate applicationDeadline,
         EmploymentType employmentType,
         JobStatus status,

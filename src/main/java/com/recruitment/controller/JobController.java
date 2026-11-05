@@ -5,12 +5,14 @@ import com.recruitment.dto.JobPageResponse;
 import com.recruitment.dto.JobRequest;
 import com.recruitment.dto.JobResponse;
 import com.recruitment.dto.JobStatus;
+import com.recruitment.security.UserPrincipal;
 import com.recruitment.service.JobService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,8 +39,10 @@ public class JobController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
-    public JobResponse create(@Valid @RequestBody JobRequest request) {
-        return jobService.create(request);
+    public JobResponse create(
+            @Valid @RequestBody JobRequest request,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return jobService.create(request, principal.getUserId());
     }
 
     @GetMapping("/{jobId}")

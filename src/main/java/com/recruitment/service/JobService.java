@@ -22,9 +22,9 @@ public class JobService {
     }
 
     @Transactional
-    public JobResponse create(JobRequest request) {
+    public JobResponse create(JobRequest request, long createdByUserId) {
         requireCompany(request.companyId());
-        long jobId = jobDao.insert(request);
+        long jobId = jobDao.insert(request, createdByUserId);
         return jobDao.findById(jobId);
     }
 

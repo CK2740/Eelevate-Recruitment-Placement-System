@@ -62,7 +62,7 @@ class JobApiTest {
 
     @Test
     void adminCanCreateViewSearchUpdateAndDeleteJobs() throws Exception {
-        given(jobService.create(any(JobRequest.class))).willReturn(job(8));
+        given(jobService.create(any(JobRequest.class), eq(7L))).willReturn(job(8));
         given(jobService.getById(8)).willReturn(job(8));
         given(jobService.getJobs(
                 eq(null), eq("Engineer"), eq("Acme"), eq("Java"), eq("London"),
@@ -120,7 +120,7 @@ class JobApiTest {
 
     @Test
     void recruiterCanManageJobs() throws Exception {
-        given(jobService.create(any(JobRequest.class))).willReturn(job(8));
+        given(jobService.create(any(JobRequest.class), eq(7L))).willReturn(job(8));
         given(jobService.getById(8)).willReturn(job(8));
         given(jobService.update(eq(8L), any(JobRequest.class))).willReturn(job(8));
         AuthenticatedSession authenticated = login("RECRUITER");
@@ -285,6 +285,7 @@ class JobApiTest {
                 new BigDecimal("85000.00"),
                 "Build backend systems",
                 "Java, SQL",
+                "Computer Science",
                 LocalDate.now().plusDays(30),
                 EmploymentType.FULL_TIME,
                 JobStatus.OPEN,
@@ -304,6 +305,7 @@ class JobApiTest {
                   "packageAmount":85000.00,
                   "jobDescription":"Build backend systems",
                   "skills":"Java, SQL",
+                  "requiredQualification":"Computer Science",
                   "applicationDeadline":"%s",
                   "employmentType":"FULL_TIME",
                   "status":"OPEN",

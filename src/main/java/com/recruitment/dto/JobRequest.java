@@ -22,6 +22,7 @@ public record JobRequest(
         BigDecimal packageAmount,
         @Size(max = 10000) String jobDescription,
         @Size(max = 5000) String skills,
+        @Size(max = 160) String requiredQualification,
         @NotNull @FutureOrPresent LocalDate applicationDeadline,
         @NotNull EmploymentType employmentType,
         JobStatus status,
