@@ -1,6 +1,6 @@
 # Recruitment and Placement Management System
 
-A Java 21 and Spring Boot application for managing recruitment and placement workflows. The project is being implemented in phases; this initial phase establishes the backend foundation and a public health endpoint.
+A Java 21 and Spring Boot application for managing recruitment and placement workflows. Phase 2 adds the initial MySQL schema through Flyway; business APIs and authentication will be implemented in later phases.
 
 ## Technology
 
@@ -26,7 +26,7 @@ mvn clean test
 
 ## Run the application
 
-The Phase 1 application can start without a running MySQL server. Flyway is configured but must remain disabled until database migrations are created in Phase 2.
+The application requires a reachable MySQL database at startup while Flyway is enabled. Flyway runs the Phase 2 initial schema migration automatically. Set `FLYWAY_ENABLED=false` only when intentionally starting without the database; this disables schema migration.
 
 ```powershell
 mvn spring-boot:run
@@ -34,16 +34,17 @@ mvn spring-boot:run
 
 Check application health at `http://localhost:8080/api/health`.
 
-To configure a local MySQL database, set these environment variables before starting the application:
+Create the database once in MySQL, then configure the connection using environment variables before starting the application:
 
 ```powershell
+mysql -u root -p -e "CREATE DATABASE recruitment_db CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
 $env:DB_URL = "jdbc:mysql://localhost:3306/recruitment_db?serverTimezone=UTC"
 $env:DB_USERNAME = "your_local_username"
 $env:DB_PASSWORD = "your_local_password"
 mvn spring-boot:run
 ```
 
-`DB_URL` may be set to a different JDBC URL as needed. Do not commit credentials; local secret files are excluded by `.gitignore`. Phase 1 contains no business tables or database migration scripts.
+`DB_URL` may be set to a different JDBC URL as needed. Do not commit credentials; local secret files are excluded by `.gitignore`. Flyway is enabled by default and applies `src/main/resources/db/migration/V1__create_initial_schema.sql`. The migration creates the normalized business schema but does not insert sample users or candidate data; it seeds only the three initial role records.
 
 ## Backend package layout
 
@@ -71,4 +72,4 @@ The frontend is planned as 12 pages built with HTML, CSS, and vanilla JavaScript
 |---|---|---|
 | GET | `/api/health` | Returns application status and timestamp; no authentication required |
 
-Other routes are denied until authentication and authorization are implemented. Business APIs, database tables, and migration scripts are intentionally out of scope for Phase 1.
+Other routes are denied until authentication and authorization are implemented. The initial schema supports users and roles, candidates, companies, jobs and eligibility criteria, applications and status history, interviews and feedback, offers, placements, and audit logs. Business APIs and authentication remain out of scope until later phases.
