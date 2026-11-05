@@ -86,6 +86,8 @@ public class SecurityConfiguration {
                         .requestMatchers("/api/jobs", "/api/jobs/**").authenticated()
                         .requestMatchers("/api/applications", "/api/applications/**").authenticated()
                         .requestMatchers("/api/interviews", "/api/interviews/**").authenticated()
+                        .requestMatchers("/api/offers", "/api/offers/**").authenticated()
+                        .requestMatchers("/api/placements", "/api/placements/**").authenticated()
                         .anyRequest().denyAll())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
