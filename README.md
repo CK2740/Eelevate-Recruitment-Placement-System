@@ -34,17 +34,19 @@ mvn spring-boot:run
 
 Check application health at `http://localhost:8080/api/health`.
 
-Create the database once in MySQL, then configure the connection using environment variables before starting the application:
+For local Windows development, keep the MySQL root password encrypted with the current Windows user account. Run this once to set or change the saved password:
 
 ```powershell
-mysql -u root -p -e "CREATE DATABASE recruitment_db CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
-$env:DB_URL = "jdbc:mysql://localhost:3306/recruitment_db?serverTimezone=UTC"
-$env:DB_USERNAME = "your_local_username"
-$env:DB_PASSWORD = "your_local_password"
-mvn spring-boot:run
+.\scripts\setup-local-db-secret.ps1
 ```
 
-`DB_URL` may be set to a different JDBC URL as needed. Do not commit credentials; local secret files are excluded by `.gitignore`. Flyway is enabled by default and applies `src/main/resources/db/migration/V1__create_initial_schema.sql`. The migration creates the normalized business schema but does not insert sample users or candidate data; it seeds only the three initial role records.
+For every subsequent startup, run:
+
+```powershell
+.\scripts\start-local.ps1
+```
+
+The encrypted password is stored outside the repository at `%LOCALAPPDATA%\Eelevate\mysql-password.dpapi` and can be decrypted only by the same Windows user. The startup script sets database credentials only for the process it launches. It connects to the existing `recruitment_db`; it does not create, reset, or recreate the database. Flyway remains enabled by default and applies the versioned migrations while preserving existing data.
 
 ## Backend package layout
 
