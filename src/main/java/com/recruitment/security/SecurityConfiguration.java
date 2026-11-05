@@ -3,7 +3,9 @@ package com.recruitment.security;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recruitment.exception.ApiError;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -24,7 +26,9 @@ import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 @EnableMethodSecurity
@@ -55,13 +59,41 @@ public class SecurityConfiguration {
         return new HttpSessionSecurityContextRepository();
     }
 
+    /**
+     * Restricts credentialed browser requests to the configured frontend origin.
+     *
+     * @param allowedOrigin the single origin allowed to call the API
+     */
+    @Bean
+    public static CorsConfigurationSource corsConfigurationSource(
+            @Value("${app.cors.allowed-origin}") final String allowedOrigin) {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(List.of(allowedOrigin));
+        configuration.setAllowCredentials(true);
+        configuration.setAllowedMethods(
+                List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Content-Type", "X-XSRF-TOKEN"));
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/api/**", configuration);
+        return source;
+    }
+
+    /**
+     * Creates the CSRF cookie with the configured session-cookie security settings.
+     *
+     * @param secureCookie whether the CSRF cookie must be sent only over HTTPS
+     * @param sameSiteCookie the SameSite policy shared with the session cookie
+     * @return the configured CSRF token repository
+     */
     @Bean
     public CsrfTokenRepository csrfTokenRepository(
-            @Value("${server.servlet.session.cookie.secure:true}") boolean secureCookie) {
+            @Value("${server.servlet.session.cookie.secure:true}") final boolean secureCookie,
+            @Value("${server.servlet.session.cookie.same-site:Lax}") final String sameSiteCookie) {
         CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         repository.setCookieCustomizer(cookie -> cookie
                 .secure(secureCookie)
-                .sameSite("Lax")
+                .sameSite(sameSiteCookie)
                 .path("/"));
         return repository;
     }
@@ -80,8 +112,10 @@ public class SecurityConfiguration {
             AuditLoggingFilter auditLoggingFilter,
             com.recruitment.service.AuditLogService auditLogService,
             SecurityContextRepository securityContextRepository,
-            CsrfTokenRepository csrfTokenRepository) throws Exception {
+            CsrfTokenRepository csrfTokenRepository,
+            final CorsConfigurationSource corsConfigurationSource) throws Exception {
         http
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .securityContext(context -> context
                         .securityContextRepository(securityContextRepository))
                 .csrf(csrf -> csrf
