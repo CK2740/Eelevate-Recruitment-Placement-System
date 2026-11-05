@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, apiRequest } from "../services/api.js";
 import { Badge, Button, Card, DataTable, Field, PageHeader, Pagination, useToast } from "../components/Shared.jsx";
 import { ToastRegion } from "../components/Shared.jsx";
 import { useAuth } from "../services/AuthContext.jsx";
+import { runExclusively } from "../services/interactionActions.js";
 
 const PAGE_SIZE = 10;
 
@@ -16,6 +17,8 @@ export function CandidatesPage() {
   const [error, setError] = useState("");
   const toast = useToast();
   const navigate = useNavigate();
+  const deleteLocks = useRef(new Set());
+  const [deletingIds, setDeletingIds] = useState(() => new Set());
 
   async function load() {
     setLoading(true);
@@ -32,11 +35,21 @@ export function CandidatesPage() {
 
   async function remove(candidate) {
     if (!window.confirm(`Delete ${candidate.fullName}?`)) return;
-    try {
-      await api.delete(`/candidates/${candidate.candidateId}`);
-      toast.push("Candidate deleted.");
-      load();
-    } catch (requestError) { toast.push(requestError.message, true); }
+    await runExclusively(deleteLocks.current, candidate.candidateId, async () => {
+      setDeletingIds((current) => new Set(current).add(candidate.candidateId));
+      try {
+        await api.delete(`/candidates/${candidate.candidateId}`);
+        toast.push("Candidate deleted.");
+        await load();
+      } catch (requestError) { toast.push(requestError.message, true); }
+      finally {
+        setDeletingIds((current) => {
+          const next = new Set(current);
+          next.delete(candidate.candidateId);
+          return next;
+        });
+      }
+    });
   }
 
   return <>
@@ -60,7 +73,9 @@ export function CandidatesPage() {
         { key: "actions", label: "Actions", render: (row) => <div className="table-actions">
           <Link className="btn btn-secondary btn-small" to={`/candidate-details.html?id=${row.candidateId}`}>View</Link>
           {can("manageCandidates") && <Link className="btn btn-secondary btn-small" to={`/candidate-form.html?id=${row.candidateId}`}>Edit</Link>}
-          {can("manageCandidates") && <Button variant="danger" small onClick={() => remove(row)}>Delete</Button>}
+          {can("manageCandidates") && <Button variant="danger" small disabled={deletingIds.has(row.candidateId)} onClick={() => remove(row)}>
+            {deletingIds.has(row.candidateId) ? "Deleting…" : "Delete"}
+          </Button>}
         </div> },
       ]} />
       <Pagination page={page} totalPages={data.totalPages} totalElements={data.totalElements} size={PAGE_SIZE} onPageChange={setPage} />

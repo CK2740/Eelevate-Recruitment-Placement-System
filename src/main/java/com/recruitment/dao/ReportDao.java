@@ -1,6 +1,7 @@
 package com.recruitment.dao;
 
 import com.recruitment.dto.ReportType;
+import com.recruitment.dto.ReportFilters;
 import java.sql.Date;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,14 +18,61 @@ public class ReportDao {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    public List<Map<String, Object>> getReport(
-            ReportType type,
-            Date from,
-            Date to,
-            Long companyId,
-            String technology,
-            Long recruiterId,
-            Integer passingYear) {
+    /**
+     * Retrieves a bounded page of rows while preserving the report's filters and ordering.
+     *
+     * @param type selected report
+     * @param from inclusive start date
+     * @param to inclusive end date
+     * @param companyId optional company filter
+     * @param technology optional technology filter
+     * @param recruiterId optional recruiter filter
+     * @param passingYear optional candidate passing-year filter
+     * @param limit maximum rows to retrieve
+     * @param offset number of rows to skip
+     * @return the requested report page
+     */
+    public List<Map<String, Object>> getReportPage(
+            final ReportType type,
+            final ReportFilters filters,
+            final int limit,
+            final long offset) {
+        ReportQuery query = buildQuery(type, filters, true);
+        List<Object> parameters = new ArrayList<>(query.parameters());
+        parameters.add(limit);
+        parameters.add(offset);
+        return jdbcTemplate.queryForList(
+                query.sql() + " LIMIT ? OFFSET ?", parameters.toArray());
+    }
+
+    /**
+     * Counts report rows using the same filters as the paginated report query.
+     *
+     * @param type selected report
+     * @param from inclusive start date
+     * @param to inclusive end date
+     * @param companyId optional company filter
+     * @param technology optional technology filter
+     * @param recruiterId optional recruiter filter
+     * @param passingYear optional candidate passing-year filter
+     * @return total matching report rows
+     */
+    public long countReport(
+            final ReportType type,
+            final ReportFilters filters) {
+        ReportQuery query = buildQuery(type, filters, false);
+        String sql = "SELECT COUNT(*) FROM (" + query.sql() + ") report_rows";
+        Long count = jdbcTemplate.queryForObject(
+                sql,
+                Long.class,
+                query.parameters().toArray());
+        return count == null ? 0 : count;
+    }
+
+    private static ReportQuery buildQuery(
+            final ReportType type,
+            final ReportFilters filters,
+            final boolean ordered) {
         String dateColumn = switch (type) {
             case RECRUITMENT_FUNNEL -> "a.applied_at";
             case COMPANY_WISE_PLACEMENTS, TECHNOLOGY_WISE_PLACEMENTS ->
@@ -46,27 +94,27 @@ public class ReportDao {
                 || type == ReportType.TECHNOLOGY_WISE_PLACEMENTS) {
             sql += " AND (p.placement_id IS NOT NULL OR a.status = 'JOINED')";
         }
-        if (from != null) {
+        if (filters.from() != null) {
             sql += " AND " + dateColumn + " >= ?";
-            parameters.add(from);
+            parameters.add(Date.valueOf(filters.from()));
         }
-        if (to != null) {
+        if (filters.to() != null) {
             sql += " AND " + dateColumn + " < DATE_ADD(?, INTERVAL 1 DAY)";
-            parameters.add(to);
+            parameters.add(Date.valueOf(filters.to()));
         }
-        if (companyId != null) {
+        if (filters.companyId() != null) {
             sql += " AND j.company_id = ?";
-            parameters.add(companyId);
+            parameters.add(filters.companyId());
         }
-        if (technology != null && !technology.isBlank()) {
+        if (filters.technology() != null && !filters.technology().isBlank()) {
             sql += " AND j.technology LIKE ?";
-            parameters.add("%" + technology.trim() + "%");
+            parameters.add("%" + filters.technology().trim() + "%");
         }
-        if (recruiterId != null) {
+        if (filters.recruiterId() != null) {
             sql += " AND j.created_by_user_id = ?";
-            parameters.add(recruiterId);
+            parameters.add(filters.recruiterId());
         }
-        if (passingYear != null) {
+        if (filters.passingYear() != null) {
             if (type == ReportType.OPEN_JOB_AGING) {
                 sql += """
                          AND EXISTS (
@@ -81,10 +129,13 @@ public class ReportDao {
             } else {
                 sql += " AND c.passing_year = ?";
             }
-            parameters.add(passingYear);
+            parameters.add(filters.passingYear());
         }
-        sql += groupAndOrder(type);
-        return jdbcTemplate.queryForList(sql, parameters.toArray());
+        sql += groupBy(type);
+        if (ordered) {
+            sql += orderBy(type);
+        }
+        return new ReportQuery(sql, parameters);
     }
 
     private static String selectClause(ReportType type) {
@@ -168,14 +219,29 @@ public class ReportDao {
         };
     }
 
-    private static String groupAndOrder(ReportType type) {
+    private static String groupBy(final ReportType type) {
         return switch (type) {
-            case RECRUITMENT_FUNNEL -> " GROUP BY a.status ORDER BY a.status";
-            case COMPANY_WISE_PLACEMENTS -> " GROUP BY co.company_id, co.company_name ORDER BY co.company_name";
-            case TECHNOLOGY_WISE_PLACEMENTS -> " GROUP BY j.technology ORDER BY j.technology";
-            case RECRUITER_PERFORMANCE -> " GROUP BY u.user_id, u.full_name ORDER BY u.full_name";
+            case RECRUITMENT_FUNNEL -> " GROUP BY a.status";
+            case COMPANY_WISE_PLACEMENTS -> " GROUP BY co.company_id, co.company_name";
+            case TECHNOLOGY_WISE_PLACEMENTS -> " GROUP BY j.technology";
+            case RECRUITER_PERFORMANCE -> " GROUP BY u.user_id, u.full_name";
+            case PENDING_INTERVIEWS, OPEN_JOB_AGING -> "";
+        };
+    }
+
+    private static String orderBy(final ReportType type) {
+        return switch (type) {
+            case RECRUITMENT_FUNNEL -> " ORDER BY a.status";
+            case COMPANY_WISE_PLACEMENTS ->
+                    " ORDER BY co.company_name, co.company_id";
+            case TECHNOLOGY_WISE_PLACEMENTS -> " ORDER BY j.technology";
+            case RECRUITER_PERFORMANCE ->
+                    " ORDER BY u.full_name, u.user_id";
             case PENDING_INTERVIEWS -> " ORDER BY i.scheduled_at, i.interview_id";
             case OPEN_JOB_AGING -> " ORDER BY age_days DESC, j.job_id";
         };
+    }
+
+    private record ReportQuery(String sql, List<Object> parameters) {
     }
 }

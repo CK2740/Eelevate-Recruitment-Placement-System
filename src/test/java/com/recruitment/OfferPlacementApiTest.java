@@ -52,7 +52,7 @@ import org.springframework.test.web.servlet.MvcResult;
         "server.servlet.session.cookie.secure=false"
 })
 @AutoConfigureMockMvc
-class OfferPlacementApiTest {
+class OfferPlacementApiTest extends AbstractLoginRateLimitApiTest {
 
     @Autowired
     private MockMvc mockMvc;

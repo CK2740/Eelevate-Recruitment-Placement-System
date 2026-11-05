@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -38,6 +39,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -48,7 +50,7 @@ import org.springframework.mock.web.MockHttpSession;
         "server.servlet.session.cookie.secure=false"
 })
 @AutoConfigureMockMvc
-class AuthenticationApiTest {
+class AuthenticationApiTest extends AbstractLoginRateLimitApiTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -128,6 +130,26 @@ class AuthenticationApiTest {
                                 """))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").value("Invalid email or password"));
+    }
+
+    @Test
+    void rateLimitedLoginReturnsGenericTooManyRequestsResponse() throws Exception {
+        doThrow(new ResponseStatusException(
+                org.springframework.http.HttpStatus.TOO_MANY_REQUESTS,
+                "Too many login attempts. Please try again later."))
+                .when(loginRateLimitService).authenticate(any(), any());
+        CsrfInfo csrfInfo = obtainCsrf(null);
+
+        mockMvc.perform(post("/api/auth/login")
+                        .cookie(csrfInfo.cookie())
+                        .header(csrfInfo.headerName(), csrfInfo.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"anyone@example.com","password":"not-a-real-password"}
+                                """))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.message").value(
+                        "Too many login attempts. Please try again later."));
     }
 
     @Test

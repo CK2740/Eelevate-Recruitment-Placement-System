@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.recruitment.dao.ReportDao;
+import com.recruitment.dto.ReportFilters;
 import com.recruitment.dto.ReportType;
 import java.sql.Date;
 import java.time.LocalDate;
@@ -37,14 +38,11 @@ class ReportDaoTest {
         LocalDate from = LocalDate.of(2026, 1, 1);
         LocalDate to = LocalDate.of(2026, 1, 31);
 
-        reportDao.getReport(
+        reportDao.getReportPage(
                 ReportType.RECRUITMENT_FUNNEL,
-                Date.valueOf(from),
-                Date.valueOf(to),
-                14L,
-                "Java",
-                9L,
-                2025);
+                new ReportFilters(from, to, 14L, "Java", 9L, 2025),
+                100,
+                0);
 
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Object[]> parameters = ArgumentCaptor.forClass(Object[].class);
@@ -60,7 +58,9 @@ class ReportDaoTest {
                 14L,
                 "%Java%",
                 9L,
-                2025
+                2025,
+                100,
+                0L
         }, parameters.getValue());
     }
 
@@ -68,13 +68,17 @@ class ReportDaoTest {
     void appliesPassingYearFilterToOpenJobApplications() {
         when(jdbcTemplate.queryForList(anyString(), any(Object[].class))).thenReturn(List.of());
 
-        reportDao.getReport(ReportType.OPEN_JOB_AGING, null, null, null, null, null, 2024);
+        reportDao.getReportPage(
+                ReportType.OPEN_JOB_AGING,
+                new ReportFilters(null, null, null, null, null, 2024),
+                100,
+                0);
 
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Object[]> parameters = ArgumentCaptor.forClass(Object[].class);
         verify(jdbcTemplate).queryForList(sql.capture(), parameters.capture());
         assertTrue(sql.getValue().contains("year_candidate.passing_year = ?"));
-        assertArrayEquals(new Object[] {2024}, parameters.getValue());
+        assertArrayEquals(new Object[] {2024, 100, 0L}, parameters.getValue());
     }
 
     @Test
@@ -85,14 +89,11 @@ class ReportDaoTest {
         LocalDate to = LocalDate.of(2026, 1, 31);
 
         for (ReportType type : types) {
-            reportDao.getReport(
+            reportDao.getReportPage(
                     type,
-                    Date.valueOf(from),
-                    Date.valueOf(to),
-                    14L,
-                    "Java",
-                    9L,
-                    2025);
+                    new ReportFilters(from, to, 14L, "Java", 9L, 2025),
+                    100,
+                    0);
         }
 
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
@@ -110,7 +111,7 @@ class ReportDaoTest {
             assertTrue(query.contains("c.passing_year = ?") || query.contains("year_candidate.passing_year = ?"),
                     types.get(index).name());
             assertArrayEquals(new Object[] {
-                    Date.valueOf(from), Date.valueOf(to), 14L, "%Java%", 9L, 2025
+                    Date.valueOf(from), Date.valueOf(to), 14L, "%Java%", 9L, 2025, 100, 0L
             }, queryParameters.get(index));
         }
 
@@ -136,5 +137,25 @@ class ReportDaoTest {
                 .contains("i.status = 'SCHEDULED'"));
         assertTrue(queries.get(types.indexOf(ReportType.OPEN_JOB_AGING))
                 .contains("j.status = 'OPEN'"));
+    }
+
+    @Test
+    void countsGroupedRowsWithoutApplyingPagination() {
+        when(jdbcTemplate.queryForObject(anyString(), org.mockito.ArgumentMatchers.eq(Long.class),
+                any(Object[].class))).thenReturn(25L);
+
+        long count = reportDao.countReport(
+                ReportType.RECRUITMENT_FUNNEL,
+                new ReportFilters(null, null, null, null, null, null));
+
+        assertEquals(25L, count);
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate).queryForObject(
+                sql.capture(),
+                org.mockito.ArgumentMatchers.eq(Long.class),
+                any(Object[].class));
+        assertTrue(sql.getValue().startsWith("SELECT COUNT(*) FROM (SELECT "));
+        assertTrue(sql.getValue().contains("GROUP BY a.status) report_rows"));
+        org.junit.jupiter.api.Assertions.assertFalse(sql.getValue().contains("LIMIT"));
     }
 }

@@ -1,18 +1,20 @@
 package com.recruitment;
 
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recruitment.dto.AuditLogPageResponse;
 import com.recruitment.dto.DashboardMetricsResponse;
+import com.recruitment.dto.ReportFilters;
 import com.recruitment.dto.ReportResponse;
 import com.recruitment.dto.ReportType;
 import com.recruitment.security.UserPrincipal;
@@ -21,6 +23,7 @@ import com.recruitment.service.DashboardService;
 import com.recruitment.service.ReportService;
 import jakarta.servlet.http.Cookie;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -40,7 +43,7 @@ import org.springframework.test.web.servlet.MvcResult;
         "server.servlet.session.cookie.secure=false"
 })
 @AutoConfigureMockMvc
-class DashboardReportAuditApiTest {
+class DashboardReportAuditApiTest extends AbstractLoginRateLimitApiTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -69,14 +72,17 @@ class DashboardReportAuditApiTest {
                 10, 4, 3, 8, 2, 1, 1, new BigDecimal("10.00")));
         given(reportService.getReport(
                 eq(ReportType.RECRUITMENT_FUNNEL),
-                isNull(),
-                isNull(),
-                isNull(),
-                isNull(),
-                isNull(),
-                isNull()))
+                eq(new ReportFilters(
+                        LocalDate.of(2026, 1, 1),
+                        LocalDate.of(2026, 1, 31),
+                        5L,
+                        "Java",
+                        8L,
+                        2025)),
+                eq(2),
+                eq(50)))
                 .willReturn(new ReportResponse(
-                        ReportType.RECRUITMENT_FUNNEL, List.of(), LocalDateTime.now()));
+                        ReportType.RECRUITMENT_FUNNEL, List.of(), LocalDateTime.now(), 2, 50, 0, 0));
         MockHttpSession session = login("RECRUITER");
 
         mockMvc.perform(get("/api/dashboard/metrics").session(session))
@@ -87,9 +93,25 @@ class DashboardReportAuditApiTest {
                          "selectedCandidates":1,"joinedCandidates":1,
                          "placementPercentage":10.00}
                         """));
-        mockMvc.perform(get("/api/reports/RECRUITMENT_FUNNEL").session(session))
+        mockMvc.perform(get("/api/reports/RECRUITMENT_FUNNEL")
+                        .param("from", "2026-01-01")
+                        .param("to", "2026-01-31")
+                        .param("companyId", "5")
+                        .param("technology", "Java")
+                        .param("recruiterId", "8")
+                        .param("passingYear", "2025")
+                        .param("page", "2")
+                        .param("size", "50")
+                        .session(session))
                 .andExpect(status().isOk());
         mockMvc.perform(get("/api/audit-logs").session(session))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void candidateCannotViewReports() throws Exception {
+        MockHttpSession session = login("CANDIDATE");
+        mockMvc.perform(get("/api/reports/RECRUITMENT_FUNNEL").session(session))
                 .andExpect(status().isForbidden());
     }
 
@@ -99,20 +121,20 @@ class DashboardReportAuditApiTest {
                 .willReturn(new AuditLogPageResponse(List.of(), 0, 20, 0, 0));
         given(reportService.exportCsv(
                 eq(ReportType.OPEN_JOB_AGING),
-                isNull(),
-                isNull(),
-                isNull(),
-                isNull(),
-                isNull(),
-                isNull()))
-                .willReturn("job_id,age_days\r\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                eq(new ReportFilters(null, null, null, null, null, null))))
+                .willReturn(output -> output.write(
+                        "job_id,age_days\r\n".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         MockHttpSession session = login("ADMIN");
 
         mockMvc.perform(get("/api/audit-logs").session(session))
                 .andExpect(status().isOk());
-        mockMvc.perform(get("/api/reports/OPEN_JOB_AGING/csv").session(session))
+        MvcResult csvResult = mockMvc.perform(get("/api/reports/OPEN_JOB_AGING/csv").session(session))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Content-Disposition", "attachment; filename=\"open_job_aging.csv\""))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        mockMvc.perform(asyncDispatch(csvResult))
+                .andExpect(status().isOk())
                 .andExpect(content().string("job_id,age_days\r\n"));
     }
 

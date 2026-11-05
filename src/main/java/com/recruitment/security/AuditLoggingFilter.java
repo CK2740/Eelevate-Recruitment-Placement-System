@@ -33,6 +33,10 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
         ContentCachingRequestWrapper requestWrapper = new ContentCachingRequestWrapper(request, 64 * 1024);
+        if (isReadOnlyMethod(request.getMethod())) {
+            filterChain.doFilter(requestWrapper, response);
+            return;
+        }
         ContentCachingResponseWrapper responseWrapper = new ContentCachingResponseWrapper(response);
         try {
             filterChain.doFilter(requestWrapper, responseWrapper);
@@ -42,6 +46,11 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         } finally {
             responseWrapper.copyBodyToResponse();
         }
+    }
+
+    private static boolean isReadOnlyMethod(final String method) {
+        return "GET".equals(method) || "HEAD".equals(method)
+                || "OPTIONS".equals(method);
     }
 
     private void auditMutation(

@@ -14,6 +14,7 @@ import com.recruitment.dto.UserManagementResponse;
 import com.recruitment.security.UserPrincipal;
 import com.recruitment.service.AuthenticationService;
 import com.recruitment.service.AuditLogService;
+import com.recruitment.service.LoginRateLimitService;
 import com.recruitment.service.UserManagementService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -49,6 +50,7 @@ import org.springframework.validation.annotation.Validated;
 public class AuthenticationController {
 
     private final AuthenticationService authenticationService;
+    private final LoginRateLimitService loginRateLimitService;
     private final AuditLogService auditLogService;
     private final UserManagementService userManagementService;
     private final SecurityContextRepository securityContextRepository;
@@ -56,11 +58,13 @@ public class AuthenticationController {
 
     public AuthenticationController(
             AuthenticationService authenticationService,
+            final LoginRateLimitService rateLimitService,
             AuditLogService auditLogService,
             UserManagementService userManagementService,
             SecurityContextRepository securityContextRepository,
             CsrfTokenRepository csrfTokenRepository) {
         this.authenticationService = authenticationService;
+        this.loginRateLimitService = rateLimitService;
         this.auditLogService = auditLogService;
         this.userManagementService = userManagementService;
         this.securityContextRepository = securityContextRepository;
@@ -77,7 +81,8 @@ public class AuthenticationController {
             @Valid @RequestBody LoginRequest request,
             HttpServletRequest servletRequest,
             HttpServletResponse servletResponse) {
-        Authentication authentication = authenticationService.authenticate(request);
+        Authentication authentication = loginRateLimitService.authenticate(
+                request, servletRequest.getRemoteAddr());
         return establishSession(authentication, servletRequest, servletResponse, "/api/auth/login");
     }
 

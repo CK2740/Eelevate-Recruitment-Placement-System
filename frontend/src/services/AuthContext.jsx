@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api } from "./api.js";
 import { hasPermission } from "./permissions.js";
+import { signOutAndClearUser } from "./interactionActions.js";
 
 const AuthContext = createContext(null);
 
@@ -36,11 +37,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    try {
-      await api.logout();
-    } finally {
-      setUser(null);
-    }
+    await signOutAndClearUser(api.logout, () => setUser(null));
   }, []);
 
   const value = useMemo(() => ({

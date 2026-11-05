@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../services/api.js";
 import { Badge, Button, Card, DataTable, Field, Modal, PageHeader, Pagination, ToastRegion, useToast } from "../components/Shared.jsx";
@@ -11,6 +11,7 @@ import {
   pageForSavedJob,
   saveJob,
 } from "./jobForm.js";
+import { runExclusively } from "../services/interactionActions.js";
 
 const SIZE = 10;
 
@@ -67,6 +68,8 @@ export function CompaniesPage() {
   const [editing, setEditing] = useState(null);
   const [modal, setModal] = useState(false);
   const toast = useToast();
+  const deleteLocks = useRef(new Set());
+  const [deletingIds, setDeletingIds] = useState(() => new Set());
 
   async function load() {
     setLoading(true); setError("");
@@ -83,8 +86,21 @@ export function CompaniesPage() {
 
   async function remove(company) {
     if (!window.confirm(`Delete ${company.companyName}? Companies linked to jobs cannot be deleted.`)) return;
-    try { await api.delete(`/companies/${company.companyId}`); toast.push("Company deleted."); load(); }
-    catch (requestError) { toast.push(requestError.message, true); }
+    await runExclusively(deleteLocks.current, company.companyId, async () => {
+      setDeletingIds((current) => new Set(current).add(company.companyId));
+      try {
+        await api.delete(`/companies/${company.companyId}`);
+        toast.push("Company deleted.");
+        await load();
+      } catch (requestError) { toast.push(requestError.message, true); }
+      finally {
+        setDeletingIds((current) => {
+          const next = new Set(current);
+          next.delete(company.companyId);
+          return next;
+        });
+      }
+    });
   }
 
   return <>
@@ -106,7 +122,9 @@ export function CompaniesPage() {
         { key: "status", label: "Status", render: (row) => <Badge value={row.status} /> },
         { key: "actions", label: "Actions", render: (row) => <div className="table-actions">{can("manageCompanies") && <>
           <Button variant="secondary" small onClick={() => { setEditing(row); setModal(true); }}>Edit</Button>
-          <Button variant="danger" small onClick={() => remove(row)}>Delete</Button>
+          <Button variant="danger" small disabled={deletingIds.has(row.companyId)} onClick={() => remove(row)}>
+            {deletingIds.has(row.companyId) ? "Deleting…" : "Delete"}
+          </Button>
         </>}</div> },
       ]} />
       <Pagination page={page} totalPages={data.totalPages} totalElements={data.totalElements} size={SIZE} onPageChange={setPage} />
@@ -212,6 +230,8 @@ export function JobsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const toast = useToast();
+  const deleteLocks = useRef(new Set());
+  const [deletingIds, setDeletingIds] = useState(() => new Set());
 
   async function load() {
     const savedJobId = location.state?.savedJobId;
@@ -243,8 +263,21 @@ export function JobsPage() {
 
   async function remove(job) {
     if (!window.confirm(`Delete ${job.jobTitle}? Jobs with applications cannot be deleted.`)) return;
-    try { await api.delete(`/jobs/${job.jobId}`); toast.push("Job deleted."); load(); }
-    catch (requestError) { toast.push(requestError.message, true); }
+    await runExclusively(deleteLocks.current, job.jobId, async () => {
+      setDeletingIds((current) => new Set(current).add(job.jobId));
+      try {
+        await api.delete(`/jobs/${job.jobId}`);
+        toast.push("Job deleted.");
+        await load();
+      } catch (requestError) { toast.push(requestError.message, true); }
+      finally {
+        setDeletingIds((current) => {
+          const next = new Set(current);
+          next.delete(job.jobId);
+          return next;
+        });
+      }
+    });
   }
 
   return <>
@@ -272,7 +305,9 @@ export function JobsPage() {
         { key: "status", label: "Status", render: (row) => <Badge value={row.status} /> },
         { key: "actions", label: "Actions", render: (row) => <div className="table-actions">{can("manageJobs") && <>
           <Link className="btn btn-secondary btn-small" to={`/job-form.html?id=${row.jobId}`}>Edit</Link>
-          <Button variant="danger" small onClick={() => remove(row)}>Delete</Button>
+          <Button variant="danger" small disabled={deletingIds.has(row.jobId)} onClick={() => remove(row)}>
+            {deletingIds.has(row.jobId) ? "Deleting…" : "Delete"}
+          </Button>
         </>}</div> },
       ]} />
       <Pagination page={page} totalPages={data.totalPages} totalElements={data.totalElements} size={SIZE} onPageChange={setPage} />

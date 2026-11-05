@@ -45,7 +45,7 @@ import org.springframework.web.server.ResponseStatusException;
         "server.servlet.session.cookie.secure=false"
 })
 @AutoConfigureMockMvc
-class JobApplicationApiTest {
+class JobApplicationApiTest extends AbstractLoginRateLimitApiTest {
 
     @Autowired
     private MockMvc mockMvc;

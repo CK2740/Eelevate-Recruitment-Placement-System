@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../services/api.js";
 import { Badge, Button, Card, DataTable, Field, Modal, PageHeader, Pagination, StatusSelect, ToastRegion, useToast } from "../components/Shared.jsx";
 import { useAuth } from "../services/AuthContext.jsx";
 import { applicationStatusRequiresReason, nextApplicationStatuses } from "./applicationStatus.js";
+import { runExclusively } from "../services/interactionActions.js";
 
 const SIZE = 10;
 
@@ -262,13 +263,19 @@ export function InterviewsPage() {
   const [reason, setReason] = useState("");
   const toast = useToast();
   const canSchedule = can("scheduleInterviews");
+  const statusLocks = useRef(new Set());
+  const [statusSaving, setStatusSaving] = useState(false);
 
   async function updateStatus() {
-    try {
-      await api.patch(`/interviews/${statusInterview.interviewId}/status`, { status, reason: reason || null });
-      toast.push("Interview status updated.");
-      setStatusInterview(null); setReloadKey((key) => key + 1);
-    } catch (requestError) { toast.push(requestError.message, true); }
+    await runExclusively(statusLocks.current, "interview", async () => {
+      setStatusSaving(true);
+      try {
+        await api.patch(`/interviews/${statusInterview.interviewId}/status`, { status, reason: reason || null });
+        toast.push("Interview status updated.");
+        setStatusInterview(null); setReloadKey((key) => key + 1);
+      } catch (requestError) { toast.push(requestError.message, true); }
+      finally { setStatusSaving(false); }
+    });
   }
 
   return <>
@@ -301,10 +308,10 @@ export function InterviewsPage() {
     </Card>
     {scheduleOpen && <InterviewScheduleModal onClose={() => setScheduleOpen(false)} onSaved={() => { toast.push("Interview scheduled."); setReloadKey((key) => key + 1); }} />}
     {feedbackInterview && <FeedbackModal interview={feedbackInterview} onClose={() => setFeedbackInterview(null)} onSaved={() => { toast.push("Feedback saved."); setReloadKey((key) => key + 1); }} />}
-    {statusInterview && <Modal title="Update interview status" onClose={() => setStatusInterview(null)}>
+    {statusInterview && <Modal title="Update interview status" onClose={() => !statusSaving && setStatusInterview(null)}>
       <div className="field"><label htmlFor="interview-status">Status</label><StatusSelect name="interview-status" value={status} options={["SCHEDULED", "COMPLETED", "CANCELLED", "NO_SHOW"]} onChange={setStatus} /></div>
       <div className="field" style={{ marginTop: 14 }}><label htmlFor="interview-reason">Reason (if applicable)</label><textarea id="interview-reason" value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} /></div>
-      <div className="form-actions"><Button variant="secondary" onClick={() => setStatusInterview(null)}>Cancel</Button><Button onClick={updateStatus}>Save status</Button></div>
+      <div className="form-actions"><Button variant="secondary" disabled={statusSaving} onClick={() => setStatusInterview(null)}>Cancel</Button><Button disabled={statusSaving} onClick={updateStatus}>{statusSaving ? "Saving…" : "Save status"}</Button></div>
     </Modal>}
     <ToastRegion items={toast.items} dismiss={toast.dismiss} />
   </>;
@@ -388,6 +395,9 @@ export function PlacementProcessPage() {
   const [placementStatus, setPlacementStatus] = useState("");
   const [placementReason, setPlacementReason] = useState("");
   const toast = useToast();
+  const updateLocks = useRef(new Set());
+  const [offerSaving, setOfferSaving] = useState(false);
+  const [placementSaving, setPlacementSaving] = useState(false);
 
   async function load() {
     setLoading(true); setError("");
@@ -400,27 +410,35 @@ export function PlacementProcessPage() {
   useEffect(() => { load(); }, [tab, page, filters.search, filters.status, reloadKey]);
 
   async function updateOffer() {
-    try {
-      await api.patch(`/offers/${statusOffer.offerId}/status`, {
-        status: nextStatus,
-        reason: reason || null,
-        joiningDate: joiningDate || null,
-      });
-      toast.push("Offer status updated.");
-      setStatusOffer(null); setReloadKey((key) => key + 1);
-    } catch (requestError) { toast.push(requestError.message, true); }
+    await runExclusively(updateLocks.current, "offer", async () => {
+      setOfferSaving(true);
+      try {
+        await api.patch(`/offers/${statusOffer.offerId}/status`, {
+          status: nextStatus,
+          reason: reason || null,
+          joiningDate: joiningDate || null,
+        });
+        toast.push("Offer status updated.");
+        setStatusOffer(null); setReloadKey((key) => key + 1);
+      } catch (requestError) { toast.push(requestError.message, true); }
+      finally { setOfferSaving(false); }
+    });
   }
   async function updatePlacement() {
-    try {
-      await api.put(`/placements/${statusPlacement.placementId}?reason=${encodeURIComponent(placementReason || "Status updated")}`, {
-        designation: statusPlacement.designation,
-        finalPackage: statusPlacement.finalPackage,
-        actualJoiningDate: statusPlacement.actualJoiningDate || null,
-        joiningStatus: placementStatus,
-      });
-      toast.push("Placement status updated.");
-      setStatusPlacement(null); setReloadKey((key) => key + 1);
-    } catch (requestError) { toast.push(requestError.message, true); }
+    await runExclusively(updateLocks.current, "placement", async () => {
+      setPlacementSaving(true);
+      try {
+        await api.put(`/placements/${statusPlacement.placementId}?reason=${encodeURIComponent(placementReason || "Status updated")}`, {
+          designation: statusPlacement.designation,
+          finalPackage: statusPlacement.finalPackage,
+          actualJoiningDate: statusPlacement.actualJoiningDate || null,
+          joiningStatus: placementStatus,
+        });
+        toast.push("Placement status updated.");
+        setStatusPlacement(null); setReloadKey((key) => key + 1);
+      } catch (requestError) { toast.push(requestError.message, true); }
+      finally { setPlacementSaving(false); }
+    });
   }
 
   return <>
@@ -459,21 +477,21 @@ export function PlacementProcessPage() {
     </Card>
     {modal === "offer" && <OfferModal onClose={() => setModal("")} onSaved={() => { toast.push("Offer created."); setReloadKey((key) => key + 1); }} />}
     {modal === "placement" && <PlacementModal onClose={() => setModal("")} onSaved={() => { toast.push("Placement record created."); setReloadKey((key) => key + 1); }} />}
-    {statusOffer && <Modal title={`Update offer · ${statusOffer.candidateName}`} onClose={() => setStatusOffer(null)}>
+    {statusOffer && <Modal title={`Update offer · ${statusOffer.candidateName}`} onClose={() => !offerSaving && setStatusOffer(null)}>
       <div className="form-grid">
         <Field label="Offer status" name="offerStatus" as="select" value={nextStatus} onChange={(event) => setNextStatus(event.target.value)}>{["PENDING", "ACCEPTED", "REJECTED", "EXPIRED", "WITHDRAWN"].map((item) => <option key={item}>{item}</option>)}</Field>
         <Field label="Joining date (on acceptance)" name="joiningDate" type="date" value={joiningDate} onChange={(event) => setJoiningDate(event.target.value)} />
         <Field label="Reason (rejection / withdrawal)" name="reason" as="textarea" className="span-all" value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} />
       </div>
-      <div className="form-actions"><Button variant="secondary" onClick={() => setStatusOffer(null)}>Cancel</Button><Button onClick={updateOffer}>Save</Button></div>
+      <div className="form-actions"><Button variant="secondary" disabled={offerSaving} onClick={() => setStatusOffer(null)}>Cancel</Button><Button disabled={offerSaving} onClick={updateOffer}>{offerSaving ? "Saving…" : "Save"}</Button></div>
     </Modal>}
-    {statusPlacement && <Modal title={`Update placement · ${statusPlacement.candidateName}`} onClose={() => setStatusPlacement(null)}>
+    {statusPlacement && <Modal title={`Update placement · ${statusPlacement.candidateName}`} onClose={() => !placementSaving && setStatusPlacement(null)}>
       <div className="form-grid">
         <Field label="Joining status" name="placementStatus" as="select" value={placementStatus} onChange={(event) => setPlacementStatus(event.target.value)}>{["PENDING", "JOINED", "NOT_JOINED"].map((item) => <option key={item}>{item}</option>)}</Field>
         <Field label="Actual joining date" name="actualJoiningDate" type="date" value={statusPlacement.actualJoiningDate || ""} onChange={(event) => setStatusPlacement({ ...statusPlacement, actualJoiningDate: event.target.value })} />
         <Field label="Reason" name="placementReason" as="textarea" className="span-all" value={placementReason} onChange={(event) => setPlacementReason(event.target.value)} maxLength={500} />
       </div>
-      <div className="form-actions"><Button variant="secondary" onClick={() => setStatusPlacement(null)}>Cancel</Button><Button onClick={updatePlacement}>Save</Button></div>
+      <div className="form-actions"><Button variant="secondary" disabled={placementSaving} onClick={() => setStatusPlacement(null)}>Cancel</Button><Button disabled={placementSaving} onClick={updatePlacement}>{placementSaving ? "Saving…" : "Save"}</Button></div>
     </Modal>}
     <ToastRegion items={toast.items} dismiss={toast.dismiss} />
   </>;

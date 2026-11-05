@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../services/AuthContext.jsx";
 import { Button } from "./Shared.jsx";
@@ -9,14 +9,28 @@ const titles = Object.fromEntries(NAVIGATION_ITEMS.map((link) => [link.href, lin
 export default function Layout() {
   const { user, signOut } = useAuth();
   const [open, setOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
+  const signOutLock = useRef(false);
   const location = useLocation();
   const name = user?.fullName || user?.email || "Team member";
   const initials = name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
   const role = user?.roles?.[0]?.replaceAll("_", " ") || "Member";
 
   async function logout() {
-    await signOut();
-    window.location.hash = "/login.html";
+    if (signOutLock.current) return;
+    signOutLock.current = true;
+    setSigningOut(true);
+    setSignOutError("");
+    try {
+      await signOut();
+      window.location.hash = "/login.html";
+    } catch (error) {
+      setSignOutError(error.message || "Could not sign out. Please try again.");
+    } finally {
+      signOutLock.current = false;
+      setSigningOut(false);
+    }
   }
 
   return (
@@ -45,9 +59,12 @@ export default function Layout() {
               <div className="avatar">{initials}</div>
               <div className="user-meta"><span className="user-name">{name}</span><span className="user-role">{role}</span></div>
             </div>
-            <Button variant="secondary" small onClick={logout}>Sign out</Button>
+            <Button variant="secondary" small disabled={signingOut} onClick={logout}>
+              {signingOut ? "Signing out…" : "Sign out"}
+            </Button>
           </div>
         </header>
+        {signOutError && <div className="error-state" role="alert">{signOutError}</div>}
         <main className="page-content"><Outlet /></main>
       </div>
     </div>

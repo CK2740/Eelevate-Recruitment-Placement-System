@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../services/api.js";
 import { Badge, Card, PageHeader } from "../components/Shared.jsx";
 import { useAuth } from "../services/AuthContext.jsx";
 import { dashboardExperienceFor } from "./dashboardExperience.js";
+import { reviewRecruiterRequest } from "./userManagement.js";
+import { runExclusively } from "../services/interactionActions.js";
 
 const EMPTY = Object.freeze({});
 
@@ -199,6 +201,7 @@ function PendingRecruiters({ resource }) {
   const [requests, setRequests] = useState(resource?.data || []);
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState(resource?.error || "");
+  const reviewLocks = useRef(new Set());
 
   useEffect(() => {
     setRequests(resource?.data || []);
@@ -206,16 +209,25 @@ function PendingRecruiters({ resource }) {
   }, [resource]);
 
   async function review(recruiterId, decision) {
-    setBusyId(recruiterId);
-    setError("");
-    try {
-      await api.post(`/auth/admin/recruiters/${recruiterId}/approval`, { decision });
-      setRequests((current) => current.filter((item) => item.userId !== recruiterId));
-    } catch (requestError) {
-      setError(requestError.message || "Could not update this recruiter request.");
-    } finally {
-      setBusyId(null);
-    }
+    await runExclusively(reviewLocks.current, recruiterId, async () => {
+      setBusyId(recruiterId);
+      setError("");
+      try {
+        const completed = await reviewRecruiterRequest(
+          api,
+          recruiterId,
+          decision,
+          (message) => window.confirm(message),
+        );
+        if (completed) {
+          setRequests((current) => current.filter((item) => item.userId !== recruiterId));
+        }
+      } catch (requestError) {
+        setError(requestError.message || "Could not update this recruiter request.");
+      } finally {
+        setBusyId(null);
+      }
+    });
   }
 
   return (
