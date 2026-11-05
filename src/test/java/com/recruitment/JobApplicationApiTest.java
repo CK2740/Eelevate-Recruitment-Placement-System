@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -37,6 +38,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.web.server.ResponseStatusException;
 
 @SpringBootTest(properties = {
         "spring.flyway.enabled=false",
@@ -223,6 +225,34 @@ class JobApplicationApiTest {
                         .session(authenticated.session())
                         .param("status", "UNKNOWN"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void skippedApplicationStagesAreRejectedForAdminAndRecruiter() throws Exception {
+        given(applicationService.updateStatus(
+                eq(12L), any(ApplicationStatusRequest.class), eq(7L), eq(true), eq(false)))
+                .willThrow(new ResponseStatusException(
+                        HttpStatus.CONFLICT, "Invalid application status transition from APPLIED to SELECTED"));
+        given(applicationService.updateStatus(
+                eq(12L), any(ApplicationStatusRequest.class), eq(7L), eq(false), eq(false)))
+                .willThrow(new ResponseStatusException(
+                        HttpStatus.CONFLICT, "Invalid application status transition from APPLIED to INTERVIEW"));
+
+        for (String role : List.of("ADMIN", "RECRUITER")) {
+            AuthenticatedSession authenticated = login(role);
+            CsrfInfo csrf = obtainCsrf(authenticated.session());
+            String nextStatus = role.equals("ADMIN") ? "SELECTED" : "INTERVIEW";
+
+            mockMvc.perform(put("/api/applications/12/status")
+                            .session(authenticated.session())
+                            .cookie(csrf.cookie())
+                            .header(csrf.headerName(), csrf.token())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"status":"%s"}
+                                    """.formatted(nextStatus)))
+                    .andExpect(status().isConflict());
+        }
     }
 
     private AuthenticatedSession login(String role) throws Exception {

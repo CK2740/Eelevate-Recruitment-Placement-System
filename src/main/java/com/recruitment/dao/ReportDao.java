@@ -27,7 +27,8 @@ public class ReportDao {
             Integer passingYear) {
         String dateColumn = switch (type) {
             case RECRUITMENT_FUNNEL -> "a.applied_at";
-            case COMPANY_WISE_PLACEMENTS, TECHNOLOGY_WISE_PLACEMENTS -> "p.created_at";
+            case COMPANY_WISE_PLACEMENTS, TECHNOLOGY_WISE_PLACEMENTS ->
+                    "COALESCE(p.actual_joining_date, p.created_at, a.updated_at)";
             case RECRUITER_PERFORMANCE -> "a.applied_at";
             case OPEN_JOB_AGING -> "j.created_at";
             case PENDING_INTERVIEWS -> "i.scheduled_at";
@@ -40,6 +41,10 @@ public class ReportDao {
         }
         if (type == ReportType.OPEN_JOB_AGING) {
             sql += " AND j.status = 'OPEN'";
+        }
+        if (type == ReportType.COMPANY_WISE_PLACEMENTS
+                || type == ReportType.TECHNOLOGY_WISE_PLACEMENTS) {
+            sql += " AND (p.placement_id IS NOT NULL OR a.status = 'JOINED')";
         }
         if (from != null) {
             sql += " AND " + dateColumn + " >= ?";
@@ -88,14 +93,22 @@ public class ReportDao {
                     "a.status AS stage, COUNT(*) AS application_count";
             case COMPANY_WISE_PLACEMENTS ->
                     "co.company_name AS company, "
-                            + "COUNT(DISTINCT p.placement_id) AS total_placements, "
-                            + "COUNT(DISTINCT CASE WHEN p.joining_status = 'JOINED' "
-                            + "THEN p.placement_id END) AS joined_candidates";
+                            + "(COUNT(DISTINCT p.placement_id) + "
+                            + "COUNT(DISTINCT CASE WHEN p.placement_id IS NULL AND a.status = 'JOINED' "
+                            + "THEN a.application_id END)) AS total_placements, "
+                            + "(COUNT(DISTINCT CASE WHEN p.joining_status = 'JOINED' OR a.status = 'JOINED' "
+                            + "THEN p.placement_id END) + "
+                            + "COUNT(DISTINCT CASE WHEN p.placement_id IS NULL AND a.status = 'JOINED' "
+                            + "THEN a.application_id END)) AS joined_candidates";
             case TECHNOLOGY_WISE_PLACEMENTS ->
                     "j.technology AS technology, "
-                            + "COUNT(DISTINCT p.placement_id) AS total_placements, "
-                            + "COUNT(DISTINCT CASE WHEN p.joining_status = 'JOINED' "
-                            + "THEN p.placement_id END) AS joined_candidates";
+                            + "(COUNT(DISTINCT p.placement_id) + "
+                            + "COUNT(DISTINCT CASE WHEN p.placement_id IS NULL AND a.status = 'JOINED' "
+                            + "THEN a.application_id END)) AS total_placements, "
+                            + "(COUNT(DISTINCT CASE WHEN p.joining_status = 'JOINED' OR a.status = 'JOINED' "
+                            + "THEN p.placement_id END) + "
+                            + "COUNT(DISTINCT CASE WHEN p.placement_id IS NULL AND a.status = 'JOINED' "
+                            + "THEN a.application_id END)) AS joined_candidates";
             case RECRUITER_PERFORMANCE ->
                     "u.user_id AS recruiter_id, u.full_name AS recruiter, "
                             + "COUNT(DISTINCT j.job_id) AS jobs_created, "
@@ -104,8 +117,10 @@ public class ReportDao {
                             + "THEN i.interview_id END) AS scheduled_interviews, "
                             + "COUNT(DISTINCT CASE WHEN a.status = 'SELECTED' "
                             + "THEN a.application_id END) AS selected_candidates, "
-                            + "COUNT(DISTINCT CASE WHEN p.joining_status = 'JOINED' "
-                            + "THEN p.placement_id END) AS joined_candidates";
+                            + "(COUNT(DISTINCT CASE WHEN p.joining_status = 'JOINED' OR a.status = 'JOINED' "
+                            + "THEN p.placement_id END) + "
+                            + "COUNT(DISTINCT CASE WHEN p.placement_id IS NULL AND a.status = 'JOINED' "
+                            + "THEN a.application_id END)) AS joined_candidates";
             case PENDING_INTERVIEWS ->
                     "i.interview_id, c.full_name AS candidate, j.job_title, "
                             + "co.company_name AS company, i.interview_round, "
@@ -124,10 +139,10 @@ public class ReportDao {
                             + "JOIN jobs j ON j.job_id = a.job_id "
                             + "JOIN companies co ON co.company_id = j.company_id";
             case COMPANY_WISE_PLACEMENTS, TECHNOLOGY_WISE_PLACEMENTS ->
-                    "placements p JOIN applications a ON a.application_id = p.application_id "
-                            + "JOIN candidates c ON c.candidate_id = a.candidate_id "
+                    "applications a JOIN candidates c ON c.candidate_id = a.candidate_id "
                             + "JOIN jobs j ON j.job_id = a.job_id "
-                            + "JOIN companies co ON co.company_id = j.company_id";
+                            + "JOIN companies co ON co.company_id = j.company_id "
+                            + "LEFT JOIN placements p ON p.application_id = a.application_id";
             case RECRUITER_PERFORMANCE ->
                     "users u JOIN user_roles ur ON ur.user_id = u.user_id "
                             + "JOIN roles r ON r.role_id = ur.role_id AND r.role_code = 'RECRUITER' "

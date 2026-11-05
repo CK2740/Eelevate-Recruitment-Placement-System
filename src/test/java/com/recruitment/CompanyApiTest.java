@@ -120,12 +120,25 @@ class CompanyApiTest {
     @Test
     void recruiterCanViewButCannotManageCompanies() throws Exception {
         given(companyService.getById(5)).willReturn(company(5));
+        given(companyService.getCompanies(
+                eq(null), eq(null), eq(null), eq(null), eq(CompanyStatus.ACTIVE), eq(0), eq(100)))
+                .willReturn(new CompanyPageResponse(List.of(company(5)), 0, 100, 1, 1));
         AuthenticatedSession authenticated = login("RECRUITER");
         CsrfInfo csrf = obtainCsrf(authenticated.session());
 
         mockMvc.perform(get("/api/companies/5").session(authenticated.session()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.companyId").value(5));
+
+        mockMvc.perform(get("/api/companies")
+                        .session(authenticated.session())
+                        .param("status", "ACTIVE")
+                        .param("size", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].companyId").value(5))
+                .andExpect(jsonPath("$.content[0].status").value("ACTIVE"));
+        verify(companyService).getCompanies(
+                null, null, null, null, CompanyStatus.ACTIVE, 0, 100);
 
         mockMvc.perform(post("/api/companies")
                         .session(authenticated.session())

@@ -22,8 +22,15 @@ export async function apiRequest(path, { method = "GET", body, headers = {}, res
     requestHeaders.set("Content-Type", "application/json");
   }
   if (!["GET", "HEAD", "OPTIONS"].includes(upperMethod)) {
-    const token = csrfToken();
-    if (token) requestHeaders.set("X-XSRF-TOKEN", token);
+    let token = csrfToken();
+    let headerName = "X-XSRF-TOKEN";
+    if (!token && path !== "/auth/csrf") {
+      const csrf = await apiRequest("/auth/csrf");
+      token = csrf?.token;
+      headerName = csrf?.headerName || headerName;
+    }
+    if (!token) throw new Error("Could not obtain a CSRF token for this request.");
+    requestHeaders.set(headerName, token);
   }
 
   const response = await fetch(`${API_BASE}${path}`, {

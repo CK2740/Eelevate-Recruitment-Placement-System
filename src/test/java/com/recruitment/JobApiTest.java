@@ -126,6 +126,10 @@ class JobApiTest {
     void recruiterCanManageJobs() throws Exception {
         given(jobService.create(any(JobRequest.class), eq(7L))).willReturn(job(8));
         given(jobService.getById(8)).willReturn(job(8));
+        given(jobService.getJobs(
+                eq(null), eq(null), eq(null), eq(null), eq(null),
+                eq(null), eq(null), eq(null), eq(0), eq(20)))
+                .willReturn(new JobPageResponse(List.of(job(8)), 0, 20, 1, 1));
         given(jobService.update(eq(8L), any(JobRequest.class))).willReturn(job(8));
         AuthenticatedSession authenticated = login("RECRUITER");
         CsrfInfo csrf = obtainCsrf(authenticated.session());
@@ -137,6 +141,14 @@ class JobApiTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jobJson()))
                 .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/jobs")
+                        .session(authenticated.session())
+                        .param("page", "0")
+                        .param("size", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].jobId").value(8))
+                .andExpect(jsonPath("$.totalElements").value(1));
 
         mockMvc.perform(get("/api/jobs/8").session(authenticated.session()))
                 .andExpect(status().isOk());

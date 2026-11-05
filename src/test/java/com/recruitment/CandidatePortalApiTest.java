@@ -20,11 +20,17 @@ import com.recruitment.dto.ApplicationStatusHistoryResponse;
 import com.recruitment.dto.CandidateProfileResponse;
 import com.recruitment.dto.CandidateNotificationResponse;
 import com.recruitment.dto.CandidateResumeDownload;
+import com.recruitment.dto.EmploymentType;
+import com.recruitment.dto.JobEligibilityRequest;
 import com.recruitment.dto.JobPageResponse;
+import com.recruitment.dto.JobResponse;
+import com.recruitment.dto.JobStatus;
 import com.recruitment.security.UserPrincipal;
 import com.recruitment.service.AuditLogService;
 import com.recruitment.service.CandidatePortalService;
 import jakarta.servlet.http.Cookie;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.core.io.ByteArrayResource;
@@ -132,6 +138,68 @@ class CandidatePortalApiTest {
         mockMvc.perform(post("/api/portal/jobs/42/applications")
                         .session(recruiter.session()))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void candidatePortalShowsApplicationStatusUpdatedByRecruitmentStaff() throws Exception {
+        LocalDateTime timestamp = LocalDateTime.now();
+        given(portalService.getApplications(7, 0, 20)).willReturn(new ApplicationPageResponse(
+                List.of(new ApplicationResponse(
+                        55,
+                        42,
+                        "Test Candidate",
+                        8,
+                        "Software Engineer",
+                        3,
+                        "Acme Inc",
+                        ApplicationStatus.INTERVIEW,
+                        "Technical interview scheduled",
+                        timestamp,
+                        timestamp)),
+                0,
+                20,
+                1,
+                1));
+        AuthenticatedSession candidate = login("CANDIDATE");
+
+        mockMvc.perform(get("/api/portal/applications").session(candidate.session()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].status").value("INTERVIEW"))
+                .andExpect(jsonPath("$.content[0].statusReason").value("Technical interview scheduled"));
+    }
+
+    @Test
+    void candidateBrowseReturnsOpenJobBeforeItsDeadlineWithoutEligibilityFilter() throws Exception {
+        JobResponse openJob = new JobResponse(
+                42,
+                3,
+                "Acme Inc",
+                "Software Engineer",
+                "Java",
+                4,
+                "London",
+                new BigDecimal("85000.00"),
+                "Build backend systems",
+                "Java, SQL",
+                "Computer Science",
+                LocalDate.now().plusDays(30),
+                EmploymentType.FULL_TIME,
+                JobStatus.OPEN,
+                new JobEligibilityRequest(new BigDecimal("70.00"), 2023, 2026, 1),
+                LocalDateTime.now(),
+                LocalDateTime.now());
+        given(portalService.getAvailableJobs(
+                null, null, null, null, null, null, null, 0, 20))
+                .willReturn(new JobPageResponse(List.of(openJob), 0, 20, 1, 1));
+        AuthenticatedSession candidate = login("CANDIDATE");
+
+        mockMvc.perform(get("/api/portal/jobs").session(candidate.session()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].jobId").value(42))
+                .andExpect(jsonPath("$.content[0].status").value("OPEN"))
+                .andExpect(jsonPath("$.totalElements").value(1));
+        verify(portalService).getAvailableJobs(
+                null, null, null, null, null, null, null, 0, 20);
     }
 
     @Test

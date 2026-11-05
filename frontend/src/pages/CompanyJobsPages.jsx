@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../services/api.js";
 import { Badge, Button, Card, DataTable, Field, Modal, PageHeader, Pagination, ToastRegion, useToast } from "../components/Shared.jsx";
 import { useAuth } from "../services/AuthContext.jsx";
+import {
+  defaultJobStatus,
+  jobRequestFromForm,
+  jobSubmissionError,
+  loadJobCompanies,
+  pageForSavedJob,
+  saveJob,
+} from "./jobForm.js";
 
 const SIZE = 10;
 
@@ -109,49 +117,55 @@ export function CompaniesPage() {
 }
 
 function JobForm({ record, onClose, onSaved, onError, inline = false }) {
+  const { can } = useAuth();
   const [companies, setCompanies] = useState([]);
+  const [companiesLoading, setCompaniesLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [companyError, setCompanyError] = useState("");
-  useEffect(() => { api.get("/companies", { size: 100 }).then((result) => setCompanies(result.content || [])).catch((error) => setCompanyError(error.message)); }, []);
+  const [submissionErrors, setSubmissionErrors] = useState([]);
+  useEffect(() => {
+    loadJobCompanies(api, record)
+      .then(setCompanies)
+      .catch((error) => setCompanyError(error.message || "Could not load companies."))
+      .finally(() => setCompaniesLoading(false));
+  }, [record]);
 
   async function submit(event) {
-    event.preventDefault(); setBusy(true);
-    const form = new FormData(event.currentTarget);
-    const optionalNumber = (name) => form.get(name) === "" ? null : Number(form.get(name));
-    const body = {
-      companyId: Number(form.get("companyId")),
-      jobTitle: form.get("jobTitle").trim(),
-      technology: form.get("technology").trim(),
-      openings: Number(form.get("openings")),
-      location: form.get("location").trim(),
-      packageAmount: Number(form.get("packageAmount")),
-      jobDescription: form.get("jobDescription").trim() || null,
-      skills: form.get("skills").trim() || null,
-      requiredQualification: form.get("requiredQualification").trim() || null,
-      applicationDeadline: form.get("applicationDeadline"),
-      employmentType: form.get("employmentType"),
-      status: form.get("status"),
-      eligibilityCriteria: {
-        minimumPercentage: optionalNumber("minimumPercentage"),
-        minimumPassingYear: optionalNumber("minimumPassingYear"),
-        maximumPassingYear: optionalNumber("maximumPassingYear"),
-        maximumBacklogs: optionalNumber("maximumBacklogs") ?? 0,
-      },
-    };
+    event.preventDefault();
+    setSubmissionErrors([]);
+    setBusy(true);
     try {
-      if (record) await api.put(`/jobs/${record.jobId}`, body);
-      else await api.post("/jobs", body);
-      onSaved(); onClose();
-    } catch (error) { onError?.(error.message); }
-    finally { setBusy(false); }
+      const request = jobRequestFromForm(new FormData(event.currentTarget));
+      const saved = await saveJob(api, record, request);
+      onSaved(saved);
+    } catch (error) {
+      const messages = jobSubmissionError(error);
+      setSubmissionErrors(messages);
+      onError?.(messages[0]);
+    } finally {
+      setBusy(false);
+    }
   }
 
+  const today = new Date();
+  const minimumDeadline = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   const content = <>
     {companyError && <p className="error-state">{companyError}</p>}
-    <form onSubmit={submit}>
+    {!companyError && !companiesLoading && companies.length === 0
+      && <p className="error-state" role="alert">
+        No active companies are available. {can("manageCompanies")
+          ? <>Add or activate a company in <Link to="/companies.html">Company Management</Link> before creating a job.</>
+          : "Ask an administrator to add or activate a company before creating a job."}
+      </p>}
+    {submissionErrors.length > 0 && <div className="error-state" role="alert" aria-live="assertive">
+      <strong>Job could not be saved.</strong>
+      <ul>{submissionErrors.map((message, index) => <li key={`${index}-${message}`}>{message}</li>)}</ul>
+    </div>}
+    <form onSubmit={submit} onInvalid={() => setSubmissionErrors(["Complete all required fields and correct any invalid values."])}>
       <div className="form-grid">
-        <Field label="Company" name="companyId" as="select" required defaultValue={record?.companyId || ""}>
-          <option value="" disabled>Select company</option>
+        <Field label="Company" name="companyId" as="select" required disabled={companiesLoading || Boolean(companyError)}
+          defaultValue={record?.companyId || ""}>
+          <option value="" disabled>{companiesLoading ? "Loading companies…" : "Select company"}</option>
           {companies.map((company) => <option key={company.companyId} value={company.companyId}>{company.companyName}</option>)}
         </Field>
         <Field label="Job title" name="jobTitle" defaultValue={record?.jobTitle} required maxLength={180} />
@@ -159,11 +173,11 @@ function JobForm({ record, onClose, onSaved, onError, inline = false }) {
         <Field label="Location" name="location" defaultValue={record?.location} required maxLength={200} />
         <Field label="Openings" name="openings" type="number" min="1" defaultValue={record?.openings || 1} required />
         <Field label="Annual package" name="packageAmount" type="number" min="0" step="0.01" defaultValue={record?.packageAmount ?? 0} required />
-        <Field label="Application deadline" name="applicationDeadline" type="date" min={new Date().toISOString().slice(0, 10)} defaultValue={record?.applicationDeadline} required />
+        <Field label="Application deadline" name="applicationDeadline" type="date" min={minimumDeadline} defaultValue={record?.applicationDeadline} required />
         <Field label="Employment type" name="employmentType" as="select" defaultValue={record?.employmentType || "FULL_TIME"}>
           {["FULL_TIME", "PART_TIME", "CONTRACT", "INTERNSHIP"].map((item) => <option key={item}>{item}</option>)}
         </Field>
-        <Field label="Status" name="status" as="select" defaultValue={record?.status || "DRAFT"}>
+        <Field label="Status" name="status" as="select" defaultValue={defaultJobStatus(record)}>
           {["DRAFT", "OPEN", "CLOSED"].map((item) => <option key={item}>{item}</option>)}
         </Field>
         <Field label="Required qualification" name="requiredQualification" defaultValue={record?.requiredQualification} maxLength={160} />
@@ -174,7 +188,11 @@ function JobForm({ record, onClose, onSaved, onError, inline = false }) {
         <Field label="Skills" name="skills" as="textarea" className="span-all" defaultValue={record?.skills} maxLength={5000} />
         <Field label="Job description" name="jobDescription" as="textarea" className="span-all" defaultValue={record?.jobDescription} maxLength={10000} />
       </div>
-      <div className="form-actions"><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button><Button disabled={busy || companies.length === 0}>{busy ? "Saving…" : "Save job"}</Button></div>
+      <div className="form-actions"><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+        <Button type="submit" disabled={busy || companiesLoading || companies.length === 0 || Boolean(companyError)}>
+          {busy ? "Saving…" : "Save job"}
+        </Button>
+      </div>
     </form>
   </>;
   return inline
@@ -184,6 +202,8 @@ function JobForm({ record, onClose, onSaved, onError, inline = false }) {
 
 export function JobsPage() {
   const { can } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [filters, setFilters] = useState({
     search: "", technology: "", location: "", status: "", jobType: "", passingYear: "",
   });
@@ -194,8 +214,16 @@ export function JobsPage() {
   const toast = useToast();
 
   async function load() {
+    const savedJobId = location.state?.savedJobId;
     setLoading(true); setError("");
-    try { setData(await api.get("/jobs", { ...filters, page, size: SIZE })); }
+    try {
+      const result = await api.get("/jobs", { ...filters, page, size: SIZE });
+      setData(result);
+      if (savedJobId) {
+        const targetPage = pageForSavedJob(result.totalElements, SIZE, result.content || [], savedJobId);
+        if (targetPage !== null && targetPage !== page) setPage(targetPage);
+      }
+    }
     catch (requestError) { setError(requestError.message); }
     finally { setLoading(false); }
   }
@@ -207,6 +235,11 @@ export function JobsPage() {
     window.addEventListener("app-toast", listener);
     return () => window.removeEventListener("app-toast", listener);
   }, []);
+  useEffect(() => {
+    if (!location.state?.jobSaved) return;
+    toast.push(location.state.jobSaved);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.key]);
 
   async function remove(job) {
     if (!window.confirm(`Delete ${job.jobTitle}? Jobs with applications cannot be deleted.`)) return;
@@ -255,7 +288,6 @@ export function JobFormPage() {
   const { can } = useAuth();
   const [record, setRecord] = useState(null);
   const [error, setError] = useState("");
-  const toast = useToast();
   useEffect(() => {
     if (id) api.get(`/jobs/${id}`).then(setRecord).catch((requestError) => setError(requestError.message));
   }, [id]);
@@ -265,7 +297,12 @@ export function JobFormPage() {
   if (id && !record) return <div className="loading-state">Loading job…</div>;
   return <>
     <PageHeader eyebrow="Opportunities" title={id ? "Edit job" : "Create a job"} subtitle="Set the role details and candidate eligibility criteria." />
-    <JobForm inline record={record} onClose={() => navigate("/jobs.html")} onSaved={() => { toast.push("Job saved."); navigate("/jobs.html"); }} onError={(message) => toast.push(message, true)} />
-    <ToastRegion items={toast.items} dismiss={toast.dismiss} />
+    <JobForm inline record={record} onClose={() => navigate("/jobs.html")}
+      onSaved={(saved) => navigate("/jobs.html", {
+        state: {
+          jobSaved: id ? "Job updated successfully." : "Job created successfully.",
+          ...(!id && saved?.jobId ? { savedJobId: saved.jobId } : {}),
+        },
+      })} />
   </>;
 }

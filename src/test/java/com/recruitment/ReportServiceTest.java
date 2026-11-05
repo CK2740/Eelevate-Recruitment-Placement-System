@@ -100,6 +100,34 @@ class ReportServiceTest {
     }
 
     @Test
+    void exportsStableHeadersForEveryReportType() {
+        Map<ReportType, String> expectedHeaders = Map.of(
+                ReportType.RECRUITMENT_FUNNEL, "\"stage\",\"application_count\"\r\n",
+                ReportType.COMPANY_WISE_PLACEMENTS,
+                        "\"company\",\"total_placements\",\"joined_candidates\"\r\n",
+                ReportType.TECHNOLOGY_WISE_PLACEMENTS,
+                        "\"technology\",\"total_placements\",\"joined_candidates\"\r\n",
+                ReportType.RECRUITER_PERFORMANCE,
+                        "\"recruiter_id\",\"recruiter\",\"jobs_created\",\"applications\","
+                                + "\"scheduled_interviews\",\"selected_candidates\",\"joined_candidates\"\r\n",
+                ReportType.PENDING_INTERVIEWS,
+                        "\"interview_id\",\"candidate\",\"job_title\",\"company\","
+                                + "\"interview_round\",\"scheduled_at\",\"interview_mode\"\r\n",
+                ReportType.OPEN_JOB_AGING,
+                        "\"job_id\",\"job_title\",\"company\",\"technology\",\"location\","
+                                + "\"age_days\",\"application_deadline\"\r\n");
+        for (ReportType type : ReportType.values()) {
+            when(reportDao.getReport(type, null, null, null, null, null, null)).thenReturn(List.of());
+        }
+
+        for (ReportType type : ReportType.values()) {
+            String csv = new String(reportService.exportCsv(
+                    type, null, null, null, null, null, null), StandardCharsets.UTF_8);
+            assertEquals(expectedHeaders.get(type), csv, type.name());
+        }
+    }
+
+    @Test
     void rejectsInvalidDateRangeWithoutQueryingDao() {
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,

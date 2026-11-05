@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { api } from "../services/api.js";
 import { Badge, Button, Card, DataTable, Field, Modal, PageHeader, Pagination, StatusSelect, ToastRegion, useToast } from "../components/Shared.jsx";
 import { useAuth } from "../services/AuthContext.jsx";
+import { applicationStatusRequiresReason, nextApplicationStatuses } from "./applicationStatus.js";
 
 const SIZE = 10;
 
@@ -75,15 +76,28 @@ export function ApplicationsPage() {
   const [updating, setUpdating] = useState(null);
   const [reason, setReason] = useState("");
   const [nextStatus, setNextStatus] = useState("");
+  const [statusBusy, setStatusBusy] = useState(false);
   const toast = useToast();
-  const mayChange = can("manageApplicationStatuses");
 
   async function saveStatus(application) {
+    if (!nextStatus) {
+      toast.push("Choose a valid next application stage.", true);
+      return;
+    }
+    if (applicationStatusRequiresReason(nextStatus) && !reason.trim()) {
+      toast.push("A reason is required when shortlisting or rejecting a candidate.", true);
+      return;
+    }
+    setStatusBusy(true);
     try {
       await api.put(`/applications/${application.applicationId}/status`, { status: nextStatus, reason: reason || null });
       toast.push("Application status updated.");
       setUpdating(null); setReason(""); setReloadKey((key) => key + 1);
-    } catch (requestError) { toast.push(requestError.message, true); }
+    } catch (requestError) {
+      toast.push(requestError.message || "Could not update application status.", true);
+    } finally {
+      setStatusBusy(false);
+    }
   }
 
   return <>
@@ -104,17 +118,26 @@ export function ApplicationsPage() {
         { key: "jobTitle", label: "Position", render: (row) => <div className="primary-cell"><strong>{row.jobTitle}</strong><span>{row.companyName}</span></div> },
         { key: "appliedAt", label: "Applied", render: (row) => new Date(row.appliedAt).toLocaleDateString() },
         { key: "status", label: "Stage", render: (row) => <Badge value={row.status} /> },
-        { key: "actions", label: "Actions", render: (row) => can("manageApplicationStatuses") && <Button variant="secondary" small onClick={() => { setUpdating(row); setNextStatus(row.status); }}>Update status</Button> },
+        { key: "actions", label: "Actions", render: (row) => can("manageApplicationStatuses") && <Button variant="secondary" small onClick={() => {
+          setUpdating(row);
+          setNextStatus(nextApplicationStatuses(row.status)[0] || "");
+          setReason("");
+        }}>Update status</Button> },
       ]} />
       <Pagination page={page} totalPages={data.totalPages} totalElements={data.totalElements} size={SIZE} onPageChange={setPage} />
     </Card>
     {applyOpen && <ApplyModal onClose={() => setApplyOpen(false)} onSaved={() => { toast.push("Application submitted. Eligibility is checked by the server."); setReloadKey((key) => key + 1); }} />}
-    {updating && <Modal title={`Update ${updating.candidateName}'s application`} onClose={() => setUpdating(null)}>
+    {updating && <Modal title={`Update ${updating.candidateName}'s application`} onClose={() => !statusBusy && setUpdating(null)}>
+      <p className="small-note">Current stage: {updating.status}. Select a valid next stage in the recruitment workflow.</p>
+      {nextApplicationStatuses(updating.status).length === 0
+        ? <p className="empty-state">This application is already in a final stage.</p>
+        : <>
       <div className="field"><label htmlFor="application-status">New stage</label>
-        <StatusSelect name="application-status" value={nextStatus} options={["APPLIED", "SHORTLISTED", "INTERVIEW", "SELECTED", "OFFERED", "JOINED", "REJECTED"]} onChange={setNextStatus} />
+        <StatusSelect name="application-status" value={nextStatus} options={nextApplicationStatuses(updating.status)} onChange={setNextStatus} />
       </div>
-      <div className="field" style={{ marginTop: 14 }}><label htmlFor="application-reason">Reason (required for rejection)</label><textarea id="application-reason" value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} /></div>
-      <div className="form-actions"><Button variant="secondary" onClick={() => setUpdating(null)}>Cancel</Button><Button onClick={() => saveStatus(updating)}>Save status</Button></div>
+      <div className="field" style={{ marginTop: 14 }}><label htmlFor="application-reason">Reason{applicationStatusRequiresReason(nextStatus) ? " (required)" : " (optional)"}</label><textarea id="application-reason" value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} /></div>
+      <div className="form-actions"><Button variant="secondary" disabled={statusBusy} onClick={() => setUpdating(null)}>Cancel</Button><Button disabled={statusBusy || !nextStatus || (applicationStatusRequiresReason(nextStatus) && !reason.trim())} onClick={() => saveStatus(updating)}>{statusBusy ? "Saving…" : "Save status"}</Button></div>
+      </>}
     </Modal>}
     <ToastRegion items={toast.items} dismiss={toast.dismiss} />
   </>;

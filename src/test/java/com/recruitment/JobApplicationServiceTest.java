@@ -136,6 +136,24 @@ class JobApplicationServiceTest {
     }
 
     @Test
+    void administratorCanAdvanceApplicationFromAppliedToShortlisted() {
+        when(applicationDao.lockState(12))
+                .thenReturn(new JobApplicationDao.ApplicationState(ApplicationStatus.APPLIED, 8L));
+        when(applicationDao.findById(12)).thenReturn(application(12, ApplicationStatus.SHORTLISTED));
+
+        ApplicationResponse response = applicationService.updateStatus(
+                12,
+                new ApplicationStatusRequest(ApplicationStatus.SHORTLISTED, "Strong match"),
+                7,
+                true,
+                false);
+
+        assertEquals(ApplicationStatus.SHORTLISTED, response.status());
+        verify(applicationDao).updateStatus(
+                12, ApplicationStatus.APPLIED, ApplicationStatus.SHORTLISTED, 7, "Strong match");
+    }
+
+    @Test
     void requiresShortlistAndRejectionReasonsAndValidTransitions() {
         when(applicationDao.lockState(12))
                 .thenReturn(new JobApplicationDao.ApplicationState(ApplicationStatus.APPLIED, 7L));
@@ -161,6 +179,18 @@ class JobApplicationServiceTest {
         assertEquals(HttpStatus.CONFLICT, invalidTransition.getStatusCode());
         verify(applicationDao, never()).updateStatus(
                 12, ApplicationStatus.APPLIED, ApplicationStatus.INTERVIEW, 7, null);
+
+        ResponseStatusException skippedStages = assertThrows(
+                ResponseStatusException.class,
+                () -> applicationService.updateStatus(
+                        12,
+                        new ApplicationStatusRequest(ApplicationStatus.SELECTED, null),
+                        7,
+                        true,
+                        false));
+        assertEquals(HttpStatus.CONFLICT, skippedStages.getStatusCode());
+        verify(applicationDao, never()).updateStatus(
+                12, ApplicationStatus.APPLIED, ApplicationStatus.SELECTED, 7, null);
     }
 
     @Test
