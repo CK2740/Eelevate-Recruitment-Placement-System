@@ -98,5 +98,13 @@ Bootstrap creates an administrator only when the users table is empty. The passw
 | POST | `/api/auth/logout` | Invalidates the current session |
 | GET | `/api/auth/me` | Returns the authenticated user's identity and server-assigned roles |
 | POST | `/api/auth/users` | Creates a user; requires the `ADMIN` role |
+| POST | `/api/candidates` | Creates a candidate; requires `ADMIN` or `RECRUITER` |
+| GET | `/api/candidates/{id}` | Returns a candidate; all three roles may view |
+| GET | `/api/candidates` | Returns a paginated, searchable, filterable candidate list |
+| PUT | `/api/candidates/{id}` | Updates candidate details; requires `ADMIN` or `RECRUITER` |
+| PATCH | `/api/candidates/{id}/status` | Changes active status; requires `ADMIN` or `RECRUITER` |
+| DELETE | `/api/candidates/{id}` | Deletes an unlinked candidate; requires `ADMIN` or `RECRUITER` |
 
 The role a client displays or submits is never used to grant permissions. Roles are read from the database and applied by Spring Security.
+
+Candidate listing accepts optional `search`, `name`, `email`, `technology`, `passingYear`, and `status` (`ACTIVE` or `INACTIVE`) query parameters, plus zero-based `page` (default `0`) and `size` (default `20`, maximum `100`). A candidate with linked applications cannot be deleted.

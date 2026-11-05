@@ -16,6 +16,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.access.AccessDeniedException;
+import jakarta.validation.ConstraintViolationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -46,6 +49,31 @@ public class GlobalExceptionHandler {
         return createError(HttpStatus.BAD_REQUEST, "Request body is invalid", request, Map.of());
     }
 
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiError> handleConstraintViolation(
+            ConstraintViolationException exception,
+            HttpServletRequest request) {
+        Map<String, String> details = exception.getConstraintViolations()
+                .stream()
+                .collect(Collectors.toMap(
+                        violation -> violation.getPropertyPath().toString(),
+                        violation -> violation.getMessage(),
+                        (firstMessage, ignored) -> firstMessage,
+                        LinkedHashMap::new));
+        return createError(HttpStatus.BAD_REQUEST, "Request validation failed", request, details);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiError> handleInvalidRequestParameter(
+            MethodArgumentTypeMismatchException exception,
+            HttpServletRequest request) {
+        return createError(
+                HttpStatus.BAD_REQUEST,
+                "Invalid value for parameter " + exception.getName(),
+                request,
+                Map.of(exception.getName(), "Invalid value"));
+    }
+
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ApiError> handleResponseStatusException(
             ResponseStatusException exception,
@@ -64,6 +92,17 @@ public class GlobalExceptionHandler {
         return createError(
                 HttpStatus.UNAUTHORIZED,
                 "Invalid email or password",
+                request,
+                Map.of());
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiError> handleAccessDeniedException(
+            AccessDeniedException exception,
+            HttpServletRequest request) {
+        return createError(
+                HttpStatus.FORBIDDEN,
+                "Access is denied",
                 request,
                 Map.of());
     }

@@ -81,6 +81,7 @@ public class SecurityConfiguration {
                         .requestMatchers("/api/health", "/api/auth/csrf", "/api/auth/login").permitAll()
                         .requestMatchers("/api/auth/users/**").hasRole("ADMIN")
                         .requestMatchers("/api/auth/me", "/api/auth/logout").authenticated()
+                        .requestMatchers("/api/candidates", "/api/candidates/**").authenticated()
                         .anyRequest().denyAll())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
