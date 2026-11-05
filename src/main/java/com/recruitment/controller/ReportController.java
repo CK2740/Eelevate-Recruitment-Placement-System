@@ -27,7 +27,7 @@ public class ReportController {
     }
 
     @GetMapping("/{type}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public ReportResponse getReport(
             @PathVariable ReportType type,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -40,7 +40,7 @@ public class ReportController {
     }
 
     @GetMapping("/{type}/csv")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public ResponseEntity<byte[]> exportCsv(
             @PathVariable ReportType type,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,

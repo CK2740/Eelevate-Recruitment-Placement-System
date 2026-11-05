@@ -44,7 +44,7 @@ public class OfferController {
 
     @PostMapping("/applications/{applicationId}/offers")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public OfferResponse create(
             @PathVariable @Min(1) long applicationId,
             @Valid @RequestBody OfferRequest request,
@@ -54,11 +54,11 @@ public class OfferController {
                 request,
                 principal.getUserId(),
                 hasRole(principal, "ADMIN"),
-                hasRole(principal, "PLACEMENT_OFFICER"));
+                false);
     }
 
     @GetMapping("/offers")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public OfferPageResponse getOffers(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String candidate,
@@ -84,7 +84,7 @@ public class OfferController {
     }
 
     @GetMapping("/offers/{offerId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public OfferResponse getById(
             @PathVariable @Min(1) long offerId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -92,11 +92,11 @@ public class OfferController {
                 offerId,
                 principal.getUserId(),
                 hasRole(principal, "ADMIN"),
-                hasRole(principal, "PLACEMENT_OFFICER"));
+                false);
     }
 
     @PutMapping("/offers/{offerId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public OfferResponse update(
             @PathVariable @Min(1) long offerId,
             @Valid @RequestBody OfferRequest request,
@@ -106,11 +106,11 @@ public class OfferController {
                 request,
                 principal.getUserId(),
                 hasRole(principal, "ADMIN"),
-                hasRole(principal, "PLACEMENT_OFFICER"));
+                false);
     }
 
     @PatchMapping("/offers/{offerId}/status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public OfferResponse updateStatus(
             @PathVariable @Min(1) long offerId,
             @Valid @RequestBody OfferStatusRequest request,
@@ -120,11 +120,11 @@ public class OfferController {
                 request,
                 principal.getUserId(),
                 hasRole(principal, "ADMIN"),
-                hasRole(principal, "PLACEMENT_OFFICER"));
+                false);
     }
 
     @PutMapping("/offers/{offerId}/joining-date")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public OfferResponse updateJoiningDate(
             @PathVariable @Min(1) long offerId,
             @Valid @RequestBody OfferJoiningDateRequest request,
@@ -134,11 +134,11 @@ public class OfferController {
                 request,
                 principal.getUserId(),
                 hasRole(principal, "ADMIN"),
-                hasRole(principal, "PLACEMENT_OFFICER"));
+                false);
     }
 
     @GetMapping("/offers/{offerId}/history")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public List<OfferStatusHistoryResponse> getHistory(
             @PathVariable @Min(1) long offerId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -146,7 +146,7 @@ public class OfferController {
                 offerId,
                 principal.getUserId(),
                 hasRole(principal, "ADMIN"),
-                hasRole(principal, "PLACEMENT_OFFICER"));
+                false);
     }
 
     private static boolean hasRole(UserPrincipal principal, String role) {

@@ -18,7 +18,7 @@ public class DashboardController {
     }
 
     @GetMapping("/metrics")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public DashboardMetricsResponse getMetrics() {
         return dashboardService.getMetrics();
     }

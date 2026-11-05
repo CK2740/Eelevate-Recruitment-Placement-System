@@ -2,7 +2,10 @@ package com.recruitment;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -14,7 +17,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recruitment.dto.InterviewMode;
 import com.recruitment.dto.InterviewPageResponse;
-import com.recruitment.dto.InterviewRecommendation;
 import com.recruitment.dto.InterviewRequest;
 import com.recruitment.dto.InterviewRescheduleRequest;
 import com.recruitment.dto.InterviewResponse;
@@ -168,6 +170,7 @@ class InterviewApiTest {
         mockMvc.perform(get("/api/interviews/21/history").session(authenticated.session()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].newStatus").value("COMPLETED"));
+        verify(auditLogService, atLeastOnce()).log(eq(7L), anyString(), anyString(), any(), any());
     }
 
     @Test
@@ -196,13 +199,13 @@ class InterviewApiTest {
     }
 
     @Test
-    void placementOfficerCanViewAndCompleteInterviewButCannotScheduleOrReschedule() throws Exception {
-        given(interviewService.getById(21, 7, false, true))
+    void recruiterCanManageInterviewWorkflow() throws Exception {
+        given(interviewService.getById(21, 7, false, false))
                 .willReturn(interview(21, InterviewStatus.SCHEDULED));
         given(interviewService.updateStatus(
-                eq(21L), eq(InterviewStatus.NO_SHOW), eq(null), eq(7L), eq(false), eq(true)))
+                eq(21L), eq(InterviewStatus.NO_SHOW), eq(null), eq(7L), eq(false), eq(false)))
                 .willReturn(interview(21, InterviewStatus.NO_SHOW));
-        AuthenticatedSession authenticated = login("PLACEMENT_OFFICER");
+        AuthenticatedSession authenticated = login("RECRUITER");
         CsrfInfo csrf = obtainCsrf(authenticated.session());
 
         mockMvc.perform(get("/api/interviews/21").session(authenticated.session()))
@@ -225,7 +228,7 @@ class InterviewApiTest {
                         .header(csrf.headerName(), csrf.token())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(interviewJson()))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isCreated());
 
         mockMvc.perform(put("/api/interviews/21/schedule")
                         .session(authenticated.session())
@@ -235,7 +238,7 @@ class InterviewApiTest {
                         .content("""
                                 {"scheduledAt":"2090-05-02T10:00:00"}
                                 """))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
     }
 
     @Test

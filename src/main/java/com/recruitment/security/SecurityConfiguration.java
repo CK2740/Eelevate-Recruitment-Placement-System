@@ -88,10 +88,17 @@ public class SecurityConfiguration {
                         .csrfTokenRepository(csrfTokenRepository)
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/api/health", "/api/auth/csrf", "/api/auth/login").permitAll()
+                        .requestMatchers(
+                                "/api/health",
+                                "/api/auth/csrf",
+                                "/api/auth/login",
+                                "/api/auth/register")
+                        .permitAll()
                         .requestMatchers("/", "/index.html", "/assets/**")
                         .permitAll()
                         .requestMatchers("/api/auth/users/**").hasRole("ADMIN")
+                        .requestMatchers("/api/auth/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/portal/**").authenticated()
                         .requestMatchers("/api/auth/me", "/api/auth/logout").authenticated()
                         .requestMatchers("/api/candidates", "/api/candidates/**").authenticated()
                         .requestMatchers("/api/companies", "/api/companies/**").authenticated()

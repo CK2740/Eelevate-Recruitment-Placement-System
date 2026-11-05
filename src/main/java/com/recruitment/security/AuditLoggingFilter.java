@@ -32,7 +32,7 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
             HttpServletRequest request,
             HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
-        ContentCachingRequestWrapper requestWrapper = new ContentCachingRequestWrapper(request);
+        ContentCachingRequestWrapper requestWrapper = new ContentCachingRequestWrapper(request, 64 * 1024);
         ContentCachingResponseWrapper responseWrapper = new ContentCachingResponseWrapper(response);
         try {
             filterChain.doFilter(requestWrapper, responseWrapper);

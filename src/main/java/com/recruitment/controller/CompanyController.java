@@ -35,19 +35,19 @@ public class CompanyController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public CompanyResponse create(@Valid @RequestBody CompanyRequest request) {
         return companyService.create(request);
     }
 
     @GetMapping("/{companyId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public CompanyResponse getById(@PathVariable @Min(1) long companyId) {
         return companyService.getById(companyId);
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public CompanyPageResponse getCompanies(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String name,
@@ -60,7 +60,7 @@ public class CompanyController {
     }
 
     @PutMapping("/{companyId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public CompanyResponse update(
             @PathVariable @Min(1) long companyId,
             @Valid @RequestBody CompanyRequest request) {
@@ -69,7 +69,7 @@ public class CompanyController {
 
     @DeleteMapping("/{companyId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public void delete(@PathVariable @Min(1) long companyId) {
         companyService.delete(companyId);
     }

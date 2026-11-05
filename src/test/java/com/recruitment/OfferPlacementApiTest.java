@@ -2,7 +2,10 @@ package com.recruitment;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -16,7 +19,6 @@ import com.recruitment.dto.OfferPageResponse;
 import com.recruitment.dto.OfferRequest;
 import com.recruitment.dto.OfferResponse;
 import com.recruitment.dto.OfferStatus;
-import com.recruitment.dto.OfferStatusHistoryResponse;
 import com.recruitment.dto.OfferStatusRequest;
 import com.recruitment.dto.PlacementPageResponse;
 import com.recruitment.dto.PlacementRequest;
@@ -74,7 +76,7 @@ class OfferPlacementApiTest {
     private PlacementService placementService;
 
     @Test
-    void recruiterCanCreateAndManageAssignedOffersButCannotManagePlacements() throws Exception {
+    void recruiterCanCreateAndManageOffersAndPlacements() throws Exception {
         given(offerService.create(15, offerRequest(), 7, false, false))
                 .willReturn(offer(30, OfferStatus.PENDING));
         given(offerService.getOffers(
@@ -115,16 +117,17 @@ class OfferPlacementApiTest {
                         .header(csrf.headerName(), csrf.token())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(placementJson()))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isCreated());
+        verify(auditLogService, atLeastOnce()).log(eq(7L), anyString(), anyString(), any(), any());
     }
 
     @Test
-    void placementOfficerCanManageOffersAndPlacementWorkflow() throws Exception {
-        given(offerService.create(15, offerRequest(), 7, false, true))
+    void recruiterCanManageOffersAndPlacementWorkflow() throws Exception {
+        given(offerService.create(15, offerRequest(), 7, false, false))
                 .willReturn(offer(30, OfferStatus.PENDING));
         given(offerService.getOffers(
                 null, "Ada", "Acme", "Engineer", OfferStatus.PENDING,
-                LocalDate.now().plusDays(5), 7, false, 1, 10))
+                LocalDate.now().plusDays(5), 7, true, 1, 10))
                 .willReturn(new OfferPageResponse(List.of(offer(30, OfferStatus.PENDING)), 1, 10, 11, 2));
         given(placementService.create(15, placementRequest(), 7))
                 .willReturn(placement(40, PlacementStatus.PENDING));
@@ -138,7 +141,7 @@ class OfferPlacementApiTest {
                 .willReturn(List.of(new PlacementStatusHistoryResponse(
                         50, PlacementStatus.PENDING, PlacementStatus.JOINED, 7L,
                         "Started", LocalDateTime.of(2090, 6, 1, 10, 0))));
-        AuthenticatedSession authenticated = login("PLACEMENT_OFFICER");
+        AuthenticatedSession authenticated = login("RECRUITER");
         CsrfInfo csrf = obtainCsrf(authenticated.session());
 
         mockMvc.perform(post("/api/applications/15/offers")

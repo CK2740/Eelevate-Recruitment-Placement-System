@@ -54,7 +54,7 @@ public class JobApplicationController {
     }
 
     @GetMapping("/applications")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public ApplicationPageResponse getApplications(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String candidate,
@@ -71,7 +71,7 @@ public class JobApplicationController {
     }
 
     @GetMapping("/applications/{applicationId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public ApplicationResponse getById(
             @PathVariable @Min(1) long applicationId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -79,11 +79,11 @@ public class JobApplicationController {
                 applicationId,
                 principal.getUserId(),
                 hasRole(principal, "ADMIN"),
-                hasRole(principal, "PLACEMENT_OFFICER"));
+                false);
     }
 
     @GetMapping("/applications/{applicationId}/history")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public List<ApplicationStatusHistoryResponse> getHistory(
             @PathVariable @Min(1) long applicationId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -91,11 +91,11 @@ public class JobApplicationController {
                 applicationId,
                 principal.getUserId(),
                 hasRole(principal, "ADMIN"),
-                hasRole(principal, "PLACEMENT_OFFICER"));
+                false);
     }
 
     @PutMapping("/applications/{applicationId}/status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public ApplicationResponse updateStatus(
             @PathVariable @Min(1) long applicationId,
             @Valid @RequestBody ApplicationStatusRequest request,
@@ -105,7 +105,7 @@ public class JobApplicationController {
                 request,
                 principal.getUserId(),
                 hasRole(principal, "ADMIN"),
-                hasRole(principal, "PLACEMENT_OFFICER"));
+                false);
     }
 
     private static boolean hasRole(UserPrincipal principal, String role) {

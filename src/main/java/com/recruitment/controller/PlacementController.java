@@ -14,7 +14,6 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -40,7 +39,7 @@ public class PlacementController {
 
     @PostMapping("/applications/{applicationId}/placements")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyRole('ADMIN', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public PlacementResponse create(
             @PathVariable @Min(1) long applicationId,
             @Valid @RequestBody PlacementRequest request,
@@ -49,7 +48,7 @@ public class PlacementController {
     }
 
     @GetMapping("/placements")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public PlacementPageResponse getPlacements(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String candidate,
@@ -65,19 +64,19 @@ public class PlacementController {
                 company,
                 designation,
                 status,
-                hasRole(principal, "RECRUITER") ? principal.getUserId() : null,
+                null,
                 page,
                 size);
     }
 
     @GetMapping("/placements/{placementId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public PlacementResponse getById(@PathVariable @Min(1) long placementId) {
         return placementService.getById(placementId);
     }
 
     @PutMapping("/placements/{placementId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public PlacementResponse update(
             @PathVariable @Min(1) long placementId,
             @Valid @RequestBody PlacementRequest request,
@@ -88,15 +87,10 @@ public class PlacementController {
     }
 
     @GetMapping("/placements/{placementId}/history")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public List<PlacementStatusHistoryResponse> getHistory(
             @PathVariable @Min(1) long placementId) {
         return placementService.getHistory(placementId);
     }
 
-    private static boolean hasRole(UserPrincipal principal, String role) {
-        return principal.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .anyMatch(authority -> authority.equals("ROLE_" + role));
-    }
 }

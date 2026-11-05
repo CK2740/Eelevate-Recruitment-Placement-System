@@ -50,7 +50,7 @@ function CompanyForm({ record, onClose, onSaved }) {
 }
 
 export function CompaniesPage() {
-  const { canManage } = useAuth();
+  const { can } = useAuth();
   const [filters, setFilters] = useState({ search: "", industry: "", location: "", status: "" });
   const [page, setPage] = useState(0);
   const [data, setData] = useState({ content: [], totalPages: 0, totalElements: 0 });
@@ -81,7 +81,7 @@ export function CompaniesPage() {
 
   return <>
     <PageHeader eyebrow="Partner directory" title="Companies" subtitle="Manage hiring partners and their contact details."
-      action={canManage && <Button onClick={() => { setEditing(null); setModal(true); }}>＋ Add company</Button>} />
+      action={can("manageCompanies") && <Button onClick={() => { setEditing(null); setModal(true); }}>＋ Add company</Button>} />
     <Card>
       <div className="toolbar">
         <input className="search-field" aria-label="Search companies" placeholder="Search company name…" value={filters.search} onChange={(event) => { setPage(0); setFilters({ ...filters, search: event.target.value }); }} />
@@ -96,7 +96,7 @@ export function CompaniesPage() {
         { key: "location", label: "Location" },
         { key: "contactPerson", label: "Contact", render: (row) => <div className="primary-cell"><strong>{row.contactPerson || "—"}</strong><span>{row.email || row.mobile || "No contact details"}</span></div> },
         { key: "status", label: "Status", render: (row) => <Badge value={row.status} /> },
-        { key: "actions", label: "Actions", render: (row) => <div className="table-actions">{canManage && <>
+        { key: "actions", label: "Actions", render: (row) => <div className="table-actions">{can("manageCompanies") && <>
           <Button variant="secondary" small onClick={() => { setEditing(row); setModal(true); }}>Edit</Button>
           <Button variant="danger" small onClick={() => remove(row)}>Delete</Button>
         </>}</div> },
@@ -183,7 +183,7 @@ function JobForm({ record, onClose, onSaved, onError, inline = false }) {
 }
 
 export function JobsPage() {
-  const { canManage } = useAuth();
+  const { can } = useAuth();
   const [filters, setFilters] = useState({
     search: "", technology: "", location: "", status: "", jobType: "", passingYear: "",
   });
@@ -216,7 +216,7 @@ export function JobsPage() {
 
   return <>
     <PageHeader eyebrow="Opportunities" title="Jobs" subtitle="Manage open roles and monitor hiring activity."
-      action={canManage && <Link className="btn btn-primary" to="/job-form.html">＋ Create job</Link>} />
+      action={can("manageJobs") && <Link className="btn btn-primary" to="/job-form.html">＋ Create job</Link>} />
     <Card>
       <div className="toolbar">
         <input className="search-field" aria-label="Search jobs" placeholder="Search job, company or technology…" value={filters.search} onChange={(event) => { setPage(0); setFilters({ ...filters, search: event.target.value }); }} />
@@ -237,7 +237,7 @@ export function JobsPage() {
         { key: "employmentType", label: "Type", render: (row) => row.employmentType?.replaceAll("_", " ") },
         { key: "applicationDeadline", label: "Deadline" },
         { key: "status", label: "Status", render: (row) => <Badge value={row.status} /> },
-        { key: "actions", label: "Actions", render: (row) => <div className="table-actions">{canManage && <>
+        { key: "actions", label: "Actions", render: (row) => <div className="table-actions">{can("manageJobs") && <>
           <Link className="btn btn-secondary btn-small" to={`/job-form.html?id=${row.jobId}`}>Edit</Link>
           <Button variant="danger" small onClick={() => remove(row)}>Delete</Button>
         </>}</div> },
@@ -252,7 +252,7 @@ export function JobFormPage() {
   const navigate = useNavigate();
   const [query] = useSearchParams();
   const id = query.get("id");
-  const { canManage } = useAuth();
+  const { can } = useAuth();
   const [record, setRecord] = useState(null);
   const [error, setError] = useState("");
   const toast = useToast();
@@ -260,7 +260,7 @@ export function JobFormPage() {
     if (id) api.get(`/jobs/${id}`).then(setRecord).catch((requestError) => setError(requestError.message));
   }, [id]);
 
-  if (!canManage) return <PageHeader title="Access restricted" subtitle="Your role does not have permission to manage jobs." />;
+  if (!can("manageJobs")) return <PageHeader title="Access restricted" subtitle="Your role does not have permission to manage jobs." />;
   if (error) return <div className="error-state card">{error}</div>;
   if (id && !record) return <div className="loading-state">Loading job…</div>;
   return <>

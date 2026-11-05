@@ -67,6 +67,10 @@ export const api = {
     await api.csrf();
     return api.post("/auth/login", { email, password });
   },
+  async register(fullName, email, password, confirmPassword, accountType) {
+    await api.csrf();
+    return api.post("/auth/register", { fullName, email, password, confirmPassword, accountType });
+  },
   async logout() {
     await api.csrf();
     return apiRequest("/auth/logout", { method: "POST" });

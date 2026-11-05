@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { Button, Field } from "../components/Shared.jsx";
 import { useAuth } from "../services/AuthContext.jsx";
 
@@ -48,7 +48,8 @@ export default function LoginPage() {
             <Field label="Password" name="password" type="password" placeholder="Enter your password" autoComplete="current-password" required />
             <div className="login-error" role="alert">{error}</div>
             <Button type="submit" disabled={busy}>{busy ? "Signing in…" : "Sign in"} <span aria-hidden="true">→</span></Button>
-            <div className="demo-note">Access is provided by your administrator. Your role and available workspace areas are loaded securely from the backend after sign-in.</div>
+            <div className="auth-switch">New to Elevate? <Link to="/register.html">Create an account</Link></div>
+            <div className="demo-note">Create a Candidate account for immediate access, or request a Recruiter account that requires Admin approval.</div>
           </form>
         </section>
       </div>

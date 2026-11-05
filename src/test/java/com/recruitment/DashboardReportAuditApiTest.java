@@ -64,7 +64,7 @@ class DashboardReportAuditApiTest {
     private AuditLogService auditLogService;
 
     @Test
-    void placementOfficerCanViewDashboardAndReportsButNotAuditLogs() throws Exception {
+    void recruiterCanViewDashboardAndReportsButNotAuditLogs() throws Exception {
         given(dashboardService.getMetrics()).willReturn(new DashboardMetricsResponse(
                 10, 4, 3, 8, 2, 1, 1, new BigDecimal("10.00")));
         given(reportService.getReport(
@@ -77,7 +77,7 @@ class DashboardReportAuditApiTest {
                 isNull()))
                 .willReturn(new ReportResponse(
                         ReportType.RECRUITMENT_FUNNEL, List.of(), LocalDateTime.now()));
-        MockHttpSession session = login("PLACEMENT_OFFICER");
+        MockHttpSession session = login("RECRUITER");
 
         mockMvc.perform(get("/api/dashboard/metrics").session(session))
                 .andExpect(status().isOk())

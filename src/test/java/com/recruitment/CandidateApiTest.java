@@ -81,12 +81,12 @@ class CandidateApiTest {
     }
 
     @Test
-    void placementOfficerCanViewAndSearchCandidates() throws Exception {
+    void recruiterCanViewAndSearchCandidates() throws Exception {
         given(candidateService.getCandidates(
                 eq(null), eq("Ada"), eq(null), eq("Java"), eq(2025),
                 eq(CandidateStatus.ACTIVE), eq(1), eq(10)))
                 .willReturn(new CandidatePageResponse(List.of(candidate(3)), 1, 10, 11, 2));
-        AuthenticatedSession authenticated = login("PLACEMENT_OFFICER");
+        AuthenticatedSession authenticated = login("RECRUITER");
 
         mockMvc.perform(get("/api/candidates")
                         .session(authenticated.session())
@@ -157,8 +157,8 @@ class CandidateApiTest {
     }
 
     @Test
-    void placementOfficerCannotManageCandidates() throws Exception {
-        AuthenticatedSession authenticated = login("PLACEMENT_OFFICER");
+    void recruiterCanManageCandidates() throws Exception {
+        AuthenticatedSession authenticated = login("RECRUITER");
         CsrfInfo csrf = obtainCsrf(authenticated.session());
 
         mockMvc.perform(post("/api/candidates")
@@ -167,7 +167,7 @@ class CandidateApiTest {
                         .header(csrf.headerName(), csrf.token())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(candidateJson()))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isCreated());
     }
 
     @Test

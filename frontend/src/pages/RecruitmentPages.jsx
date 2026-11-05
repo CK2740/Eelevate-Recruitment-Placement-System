@@ -64,7 +64,7 @@ function ApplyModal({ onClose, onSaved }) {
 }
 
 export function ApplicationsPage() {
-  const { canManage, canPlace } = useAuth();
+  const { can } = useAuth();
   const [query] = useSearchParams();
   const [filters, setFilters] = useState(() => ({
     search: "", candidate: query.get("candidate") || "", company: "", status: "", passingYear: "",
@@ -76,7 +76,7 @@ export function ApplicationsPage() {
   const [reason, setReason] = useState("");
   const [nextStatus, setNextStatus] = useState("");
   const toast = useToast();
-  const mayChange = canManage || canPlace;
+  const mayChange = can("manageApplicationStatuses");
 
   async function saveStatus(application) {
     try {
@@ -88,7 +88,7 @@ export function ApplicationsPage() {
 
   return <>
     <PageHeader eyebrow="Talent pipeline" title="Applications" subtitle="Review candidate applications and progress through the selection workflow."
-      action={mayChange && <Button onClick={() => setApplyOpen(true)}>＋ New application</Button>} />
+      action={can("createApplications") && <Button onClick={() => setApplyOpen(true)}>＋ New application</Button>} />
     <Card>
       <div className="toolbar">
         <input className="search-field" aria-label="Search applications" placeholder="Search role or company…" value={filters.search} onChange={(event) => { setPage(0); setFilters({ ...filters, search: event.target.value }); }} />
@@ -104,7 +104,7 @@ export function ApplicationsPage() {
         { key: "jobTitle", label: "Position", render: (row) => <div className="primary-cell"><strong>{row.jobTitle}</strong><span>{row.companyName}</span></div> },
         { key: "appliedAt", label: "Applied", render: (row) => new Date(row.appliedAt).toLocaleDateString() },
         { key: "status", label: "Stage", render: (row) => <Badge value={row.status} /> },
-        { key: "actions", label: "Actions", render: (row) => mayChange && <Button variant="secondary" small onClick={() => { setUpdating(row); setNextStatus(row.status); }}>Update status</Button> },
+        { key: "actions", label: "Actions", render: (row) => can("manageApplicationStatuses") && <Button variant="secondary" small onClick={() => { setUpdating(row); setNextStatus(row.status); }}>Update status</Button> },
       ]} />
       <Pagination page={page} totalPages={data.totalPages} totalElements={data.totalElements} size={SIZE} onPageChange={setPage} />
     </Card>
@@ -222,7 +222,7 @@ function FeedbackModal({ interview, onClose, onSaved }) {
 }
 
 export function InterviewsPage() {
-  const { canManage, canPlace } = useAuth();
+  const { can } = useAuth();
   const [filters, setFilters] = useState({ search: "", status: "", mode: "", from: "", to: "" });
   const [reloadKey, setReloadKey] = useState(0);
   const { page, setPage, data, loading, error } = usePagedData("/interviews", {
@@ -238,7 +238,7 @@ export function InterviewsPage() {
   const [status, setStatus] = useState("");
   const [reason, setReason] = useState("");
   const toast = useToast();
-  const canSchedule = canManage;
+  const canSchedule = can("scheduleInterviews");
 
   async function updateStatus() {
     try {
@@ -270,8 +270,8 @@ export function InterviewsPage() {
         { key: "interviewMode", label: "Mode" },
         { key: "status", label: "Status", render: (row) => <Badge value={row.status} /> },
         { key: "actions", label: "Actions", render: (row) => <div className="table-actions">
-          {(canManage || canPlace) && <Button variant="secondary" small onClick={() => setFeedbackInterview(row)}>Feedback</Button>}
-          {(canManage || canPlace) && <Button variant="secondary" small onClick={() => { setStatusInterview(row); setStatus(row.status); }}>Status</Button>}
+          {can("manageInterviewFeedback") && <Button variant="secondary" small onClick={() => setFeedbackInterview(row)}>Feedback</Button>}
+          {can("manageInterviewStatuses") && <Button variant="secondary" small onClick={() => { setStatusInterview(row); setStatus(row.status); }}>Status</Button>}
         </div> },
       ]} />
       <Pagination page={page} totalPages={data.totalPages} totalElements={data.totalElements} size={SIZE} onPageChange={setPage} />
@@ -348,7 +348,7 @@ function PlacementModal({ onClose, onSaved }) {
 }
 
 export function PlacementProcessPage() {
-  const { canManage, canPlace } = useAuth();
+  const { can } = useAuth();
   const [tab, setTab] = useState("offers");
   const [filters, setFilters] = useState({ search: "", status: "" });
   const [page, setPage] = useState(0);
@@ -402,8 +402,8 @@ export function PlacementProcessPage() {
 
   return <>
     <PageHeader eyebrow="Successful outcomes" title="Offers & placement" subtitle="Follow offers from decision to candidate joining."
-      action={tab === "offers" ? <Button onClick={() => setModal("offer")}>＋ Create offer</Button>
-        : tab === "placements" && canPlace ? <Button onClick={() => setModal("placement")}>＋ Add placement</Button> : null} />
+      action={tab === "offers" && can("manageOffers") ? <Button onClick={() => setModal("offer")}>＋ Create offer</Button>
+        : tab === "placements" && can("managePlacements") ? <Button onClick={() => setModal("placement")}>＋ Add placement</Button> : null} />
     <div className="tab-bar">
       <button className={`tab-button${tab === "offers" ? " active" : ""}`} onClick={() => { setTab("offers"); setPage(0); }}>Offers</button>
       <button className={`tab-button${tab === "placements" ? " active" : ""}`} onClick={() => { setTab("placements"); setPage(0); }}>Placements</button>
@@ -423,14 +423,14 @@ export function PlacementProcessPage() {
         { key: "expiryDate", label: "Expires" },
         { key: "joiningDate", label: "Joining date" },
         { key: "status", label: "Status", render: (row) => <Badge value={row.status} /> },
-        { key: "actions", label: "Actions", render: (row) => <Button variant="secondary" small onClick={() => { setStatusOffer(row); setNextStatus(row.status); setJoiningDate(row.joiningDate || ""); }}>Update</Button> },
+        { key: "actions", label: "Actions", render: (row) => can("manageOffers") && <Button variant="secondary" small onClick={() => { setStatusOffer(row); setNextStatus(row.status); setJoiningDate(row.joiningDate || ""); }}>Update</Button> },
       ]} /> : <DataTable loading={loading} error={error} rows={data.content || []} columns={[
         { key: "candidateName", label: "Candidate", render: (row) => <div className="primary-cell"><strong>{row.candidateName}</strong><span>{row.companyName}</span></div> },
         { key: "designation", label: "Role" },
         { key: "finalPackage", label: "Final package", render: (row) => row.finalPackage?.toLocaleString() },
         { key: "actualJoiningDate", label: "Joined on" },
         { key: "joiningStatus", label: "Status", render: (row) => <Badge value={row.joiningStatus} /> },
-        { key: "actions", label: "Actions", render: (row) => canPlace && <Button variant="secondary" small onClick={() => { setStatusPlacement(row); setPlacementStatus(row.joiningStatus); }}>Update</Button> },
+        { key: "actions", label: "Actions", render: (row) => can("managePlacements") && <Button variant="secondary" small onClick={() => { setStatusPlacement(row); setPlacementStatus(row.joiningStatus); }}>Update</Button> },
       ]} />}
       <Pagination page={page} totalPages={data.totalPages} totalElements={data.totalElements} size={SIZE} onPageChange={setPage} />
     </Card>

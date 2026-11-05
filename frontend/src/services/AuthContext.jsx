@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api } from "./api.js";
+import { hasPermission } from "./permissions.js";
 
 const AuthContext = createContext(null);
 
@@ -28,6 +29,12 @@ export function AuthProvider({ children }) {
     return authenticated;
   }, []);
 
+  const signUp = useCallback(async (fullName, email, password, confirmPassword, accountType) => {
+    const result = await api.register(fullName, email, password, confirmPassword, accountType);
+    if (result.user) setUser(result.user);
+    return result;
+  }, []);
+
   const signOut = useCallback(async () => {
     try {
       await api.logout();
@@ -40,11 +47,10 @@ export function AuthProvider({ children }) {
     user,
     loading,
     signIn,
+    signUp,
     signOut,
-    hasRole: (...roles) => roles.some((role) => user?.roles?.includes(role)),
-    canManage: user?.roles?.some((role) => ["ADMIN", "RECRUITER"].includes(role)) || false,
-    canPlace: user?.roles?.some((role) => ["ADMIN", "PLACEMENT_OFFICER"].includes(role)) || false,
-  }), [user, loading, signIn, signOut]);
+    can: (permission) => hasPermission(user, permission),
+  }), [user, loading, signIn, signUp, signOut]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -10,7 +10,6 @@ import com.recruitment.dto.OfferStatusHistoryResponse;
 import com.recruitment.dto.OfferStatusRequest;
 import java.time.LocalDate;
 import java.util.List;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;

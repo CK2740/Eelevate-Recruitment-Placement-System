@@ -118,43 +118,9 @@ class CompanyApiTest {
     }
 
     @Test
-    void recruiterCanManageCompanies() throws Exception {
-        given(companyService.create(any(CompanyRequest.class))).willReturn(company(5));
+    void recruiterCanViewButCannotManageCompanies() throws Exception {
         given(companyService.getById(5)).willReturn(company(5));
-        given(companyService.update(eq(5L), any(CompanyRequest.class))).willReturn(company(5));
         AuthenticatedSession authenticated = login("RECRUITER");
-        CsrfInfo csrf = obtainCsrf(authenticated.session());
-
-        mockMvc.perform(post("/api/companies")
-                        .session(authenticated.session())
-                        .cookie(csrf.cookie())
-                        .header(csrf.headerName(), csrf.token())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(companyJson()))
-                .andExpect(status().isCreated());
-
-        mockMvc.perform(get("/api/companies/5").session(authenticated.session()))
-                .andExpect(status().isOk());
-
-        mockMvc.perform(put("/api/companies/5")
-                        .session(authenticated.session())
-                        .cookie(csrf.cookie())
-                        .header(csrf.headerName(), csrf.token())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(companyJson()))
-                .andExpect(status().isOk());
-
-        mockMvc.perform(delete("/api/companies/5")
-                        .session(authenticated.session())
-                        .cookie(csrf.cookie())
-                        .header(csrf.headerName(), csrf.token()))
-                .andExpect(status().isNoContent());
-    }
-
-    @Test
-    void placementOfficerCanViewButCannotManageCompanies() throws Exception {
-        given(companyService.getById(5)).willReturn(company(5));
-        AuthenticatedSession authenticated = login("PLACEMENT_OFFICER");
         CsrfInfo csrf = obtainCsrf(authenticated.session());
 
         mockMvc.perform(get("/api/companies/5").session(authenticated.session()))

@@ -2,7 +2,10 @@ package com.recruitment;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -125,6 +128,7 @@ class JobApplicationApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].previousStatus").value("APPLIED"))
                 .andExpect(jsonPath("$[0].reason").value("Strong match"));
+        verify(auditLogService, atLeastOnce()).log(eq(7L), anyString(), anyString(), any(), any());
     }
 
     @Test
@@ -159,15 +163,15 @@ class JobApplicationApiTest {
     }
 
     @Test
-    void placementOfficerCanViewAndUpdatePlacementWorkflowButCannotApply() throws Exception {
+    void recruiterCanViewAndUpdateApplicationWorkflowAndApply() throws Exception {
         given(applicationService.getApplications(
-                null, null, null, null, null, null, 7, false, 0, 20))
+                null, null, null, null, null, null, 7, true, 0, 20))
                 .willReturn(new ApplicationPageResponse(
                         List.of(application(12, ApplicationStatus.SHORTLISTED)), 0, 20, 1, 1));
         given(applicationService.updateStatus(
-                eq(12L), any(ApplicationStatusRequest.class), eq(7L), eq(false), eq(true)))
+                eq(12L), any(ApplicationStatusRequest.class), eq(7L), eq(false), eq(false)))
                 .willReturn(application(12, ApplicationStatus.INTERVIEW));
-        AuthenticatedSession authenticated = login("PLACEMENT_OFFICER");
+        AuthenticatedSession authenticated = login("RECRUITER");
         CsrfInfo csrf = obtainCsrf(authenticated.session());
 
         mockMvc.perform(get("/api/applications").session(authenticated.session()))
@@ -193,7 +197,7 @@ class JobApplicationApiTest {
                         .content("""
                                 {"candidateId":4}
                                 """))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isCreated());
     }
 
     @Test

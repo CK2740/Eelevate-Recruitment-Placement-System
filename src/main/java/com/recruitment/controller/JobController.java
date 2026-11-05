@@ -46,13 +46,13 @@ public class JobController {
     }
 
     @GetMapping("/{jobId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public JobResponse getById(@PathVariable @Min(1) long jobId) {
         return jobService.getById(jobId);
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public JobPageResponse getJobs(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String jobTitle,

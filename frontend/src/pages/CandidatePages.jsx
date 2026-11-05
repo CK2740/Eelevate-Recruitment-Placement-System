@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { api } from "../services/api.js";
+import { api, apiRequest } from "../services/api.js";
 import { Badge, Button, Card, DataTable, Field, PageHeader, Pagination, useToast } from "../components/Shared.jsx";
 import { ToastRegion } from "../components/Shared.jsx";
 import { useAuth } from "../services/AuthContext.jsx";
@@ -8,7 +8,7 @@ import { useAuth } from "../services/AuthContext.jsx";
 const PAGE_SIZE = 10;
 
 export function CandidatesPage() {
-  const { canManage } = useAuth();
+  const { can } = useAuth();
   const [filters, setFilters] = useState({ search: "", passingYear: "", status: "" });
   const [page, setPage] = useState(0);
   const [data, setData] = useState({ content: [], totalPages: 0, totalElements: 0 });
@@ -41,7 +41,7 @@ export function CandidatesPage() {
 
   return <>
     <PageHeader eyebrow="Talent directory" title="Candidates" subtitle="Find and manage candidate profiles."
-      action={canManage && <Button onClick={() => navigate("/candidate-form.html")}>＋ Add candidate</Button>} />
+      action={can("manageCandidates") && <Button onClick={() => navigate("/candidate-form.html")}>＋ Add candidate</Button>} />
     <Card>
       <div className="toolbar">
         <input aria-label="Search candidates" className="search-field" placeholder="Search name, email or skills…" value={filters.search} onChange={(event) => { setPage(0); setFilters({ ...filters, search: event.target.value }); }} />
@@ -59,8 +59,8 @@ export function CandidatesPage() {
         { key: "status", label: "Status", render: (row) => <Badge value={row.status} /> },
         { key: "actions", label: "Actions", render: (row) => <div className="table-actions">
           <Link className="btn btn-secondary btn-small" to={`/candidate-details.html?id=${row.candidateId}`}>View</Link>
-          {canManage && <Link className="btn btn-secondary btn-small" to={`/candidate-form.html?id=${row.candidateId}`}>Edit</Link>}
-          {canManage && <Button variant="danger" small onClick={() => remove(row)}>Delete</Button>}
+          {can("manageCandidates") && <Link className="btn btn-secondary btn-small" to={`/candidate-form.html?id=${row.candidateId}`}>Edit</Link>}
+          {can("manageCandidates") && <Button variant="danger" small onClick={() => remove(row)}>Delete</Button>}
         </div> },
       ]} />
       <Pagination page={page} totalPages={data.totalPages} totalElements={data.totalElements} size={PAGE_SIZE} onPageChange={setPage} />
@@ -70,7 +70,7 @@ export function CandidatesPage() {
 }
 
 export function CandidateFormPage() {
-  const { canManage } = useAuth();
+  const { can } = useAuth();
   const [query] = useSearchParams();
   const id = query.get("id");
   const navigate = useNavigate();
@@ -84,7 +84,7 @@ export function CandidateFormPage() {
     api.get(`/candidates/${id}`).then(setCandidate).catch((error) => setLoadError(error.message));
   }, [id]);
 
-  if (!canManage) return <PageHeader title="Access restricted" subtitle="Your role can view candidate profiles but cannot change them." />;
+  if (!can("manageCandidates")) return <PageHeader title="Access restricted" subtitle="Your role can view candidate profiles but cannot change them." />;
   if (loadError) return <div className="error-state card">{loadError}</div>;
   if (id && !candidate) return <div className="loading-state">Loading candidate…</div>;
 
@@ -137,7 +137,9 @@ export function CandidateDetailsPage() {
   const [candidate, setCandidate] = useState(null);
   const [applications, setApplications] = useState([]);
   const [error, setError] = useState("");
-  const { canManage } = useAuth();
+  const [resumeError, setResumeError] = useState("");
+  const [resumeBusy, setResumeBusy] = useState(false);
+  const { can } = useAuth();
   useEffect(() => {
     if (!id) { setError("A candidate ID is required."); return; }
     api.get(`/candidates/${id}`)
@@ -150,17 +152,41 @@ export function CandidateDetailsPage() {
       .catch((requestError) => setError(requestError.message));
   }, [id]);
 
+  async function downloadResume() {
+    setResumeBusy(true);
+    setResumeError("");
+    try {
+      const file = await apiRequest(`/candidates/${id}/resume`, { responseType: "blob" });
+      const url = URL.createObjectURL(file);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${candidate.fullName.replace(/[^\w.-]+/g, "_")}-resume`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (requestError) {
+      setResumeError(requestError.message || "Could not download the candidate resume.");
+    } finally {
+      setResumeBusy(false);
+    }
+  }
+
   if (error) return <div className="error-state card">{error}</div>;
   if (!candidate) return <div className="loading-state">Loading candidate profile…</div>;
   return <>
     <PageHeader eyebrow="Talent directory" title="Candidate profile" subtitle="Profile information and recruitment history."
-      action={canManage && <Link className="btn btn-primary" to={`/candidate-form.html?id=${candidate.candidateId}`}>Edit profile</Link>} />
+      action={can("manageCandidates") && <Link className="btn btn-primary" to={`/candidate-form.html?id=${candidate.candidateId}`}>Edit profile</Link>} />
     <div className="profile-grid">
       <Card className="profile-card">
         <div className="profile-avatar">{candidate.fullName.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}</div>
         <div className="profile-name">{candidate.fullName}</div>
         <p className="profile-contact">{candidate.email}<br />{candidate.mobile}</p>
         <Badge value={candidate.status} />
+        {can("viewCandidates") && <div className="form-actions">
+          <Button variant="secondary" small disabled={resumeBusy} onClick={downloadResume}>
+            {resumeBusy ? "Loading resume…" : "View / download resume"}
+          </Button>
+        </div>}
+        {resumeError && <p className="error-state">{resumeError}</p>}
         <div className="detail-list">
           <div className="detail-item"><span>Qualification</span><strong>{candidate.qualification}</strong></div>
           <div className="detail-item"><span>Passing year</span><strong>{candidate.passingYear}</strong></div>

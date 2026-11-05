@@ -2,19 +2,9 @@ import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../services/AuthContext.jsx";
 import { Button } from "./Shared.jsx";
+import { NAVIGATION_ITEMS, visibleNavigation } from "../services/permissions.js";
 
-const links = [
-  { title: "Overview", href: "/dashboard.html", icon: "◫", roles: ["ADMIN", "RECRUITER", "PLACEMENT_OFFICER"] },
-  { title: "Candidates", href: "/candidates.html", icon: "♙", roles: ["ADMIN", "RECRUITER", "PLACEMENT_OFFICER"] },
-  { title: "Companies", href: "/companies.html", icon: "▦", roles: ["ADMIN", "RECRUITER", "PLACEMENT_OFFICER"] },
-  { title: "Jobs", href: "/jobs.html", icon: "▤", roles: ["ADMIN", "RECRUITER", "PLACEMENT_OFFICER"] },
-  { title: "Applications", href: "/applications.html", icon: "☷", roles: ["ADMIN", "RECRUITER", "PLACEMENT_OFFICER"] },
-  { title: "Interviews", href: "/interviews.html", icon: "◷", roles: ["ADMIN", "RECRUITER", "PLACEMENT_OFFICER"] },
-  { title: "Offers & placement", href: "/placement-process.html", icon: "◇", roles: ["ADMIN", "RECRUITER", "PLACEMENT_OFFICER"] },
-  { title: "Reports", href: "/reports.html", icon: "▥", roles: ["ADMIN", "RECRUITER", "PLACEMENT_OFFICER"] },
-];
-
-const titles = Object.fromEntries(links.map((link) => [link.href, link.title]));
+const titles = Object.fromEntries(NAVIGATION_ITEMS.map((link) => [link.href, link.title]));
 
 export default function Layout() {
   const { user, signOut } = useAuth();
@@ -36,7 +26,7 @@ export default function Layout() {
         <a className="brand" href="#/dashboard.html"><span className="brand-mark">E</span><span>elevate</span></a>
         <div className="nav-label">Workspace</div>
         <nav className="nav-list" aria-label="Main navigation">
-          {links.filter((link) => link.roles.some((allowed) => user?.roles?.includes(allowed))).map((link) => (
+          {visibleNavigation(user).map((link) => (
             <NavLink key={link.href} to={link.href} onClick={() => setOpen(false)} className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
               <span className="nav-icon">{link.icon}</span>{link.title}
             </NavLink>

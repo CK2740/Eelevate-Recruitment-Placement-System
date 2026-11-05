@@ -17,7 +17,8 @@ import org.springframework.stereotype.Service;
 public class JdbcUserDetailsService implements UserDetailsService {
 
     private static final String USER_QUERY = """
-            SELECT user_id, email, password_hash, full_name, is_active
+            SELECT user_id, email, password_hash, full_name,
+                   (is_active AND account_status = 'APPROVED') AS is_active
             FROM users
             WHERE email = ?
             """;

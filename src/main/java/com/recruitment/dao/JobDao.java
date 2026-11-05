@@ -91,8 +91,41 @@ public class JobDao {
             Integer passingYear,
             int page,
             int size) {
+        return findAll(search, jobTitle, company, technology, location, jobType, status, passingYear,
+                page, size, false);
+    }
+
+    public JobPageResponse findAvailable(
+            String search,
+            String jobTitle,
+            String company,
+            String technology,
+            String location,
+            EmploymentType jobType,
+            Integer passingYear,
+            int page,
+            int size) {
+        return findAll(search, jobTitle, company, technology, location, jobType, JobStatus.OPEN, passingYear,
+                page, size, true);
+    }
+
+    private JobPageResponse findAll(
+            String search,
+            String jobTitle,
+            String company,
+            String technology,
+            String location,
+            EmploymentType jobType,
+            JobStatus status,
+            Integer passingYear,
+            int page,
+            int size,
+            boolean availableOnly) {
         StringBuilder where = new StringBuilder(" WHERE 1 = 1");
         List<Object> parameters = new ArrayList<>();
+        if (availableOnly) {
+            where.append(" AND j.status = 'OPEN' AND j.application_deadline >= CURRENT_DATE()");
+        }
 
         if (hasText(search)) {
             where.append("""

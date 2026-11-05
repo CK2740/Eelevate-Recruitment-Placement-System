@@ -5,11 +5,18 @@ import com.recruitment.dto.CandidateRequest;
 import com.recruitment.dto.CandidateResponse;
 import com.recruitment.dto.CandidateStatus;
 import com.recruitment.dto.CandidateStatusRequest;
+import com.recruitment.dto.CandidateResumeDownload;
+import com.recruitment.service.CandidatePortalService;
 import com.recruitment.service.CandidateService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.http.HttpStatus;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -30,9 +37,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class CandidateController {
 
     private final CandidateService candidateService;
+    private final CandidatePortalService candidatePortalService;
 
-    public CandidateController(CandidateService candidateService) {
+    public CandidateController(
+            CandidateService candidateService,
+            CandidatePortalService candidatePortalService) {
         this.candidateService = candidateService;
+        this.candidatePortalService = candidatePortalService;
     }
 
     @PostMapping
@@ -43,13 +54,24 @@ public class CandidateController {
     }
 
     @GetMapping("/{candidateId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public CandidateResponse getById(@PathVariable @Min(1) long candidateId) {
         return candidateService.getById(candidateId);
     }
 
+    @GetMapping("/{candidateId}/resume")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
+    public ResponseEntity<Resource> getResume(@PathVariable @Min(1) long candidateId) {
+        CandidateResumeDownload download = candidatePortalService.getCandidateResume(candidateId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(download.contentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(download.originalName()).build().toString())
+                .body(download.resource());
+    }
+
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public CandidatePageResponse getCandidates(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String name,

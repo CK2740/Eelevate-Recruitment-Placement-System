@@ -54,9 +54,9 @@ public class InterviewService {
         }
         InterviewResponse existing = interviewDao.findById(interviewId);
         LocalDateTime scheduledAt = request.scheduledAt();
-        int duration = request.durationMinutes() == null
-                ? existing.durationMinutes()
-                : request.durationMinutes();
+        int duration = java.util.Optional.ofNullable(request.durationMinutes())
+                .map(Integer::intValue)
+                .orElseGet(() -> existing.durationMinutes());
         ensureNoConflict(context.candidateId(), scheduledAt, duration, interviewId);
         if (!interviewDao.updateSchedule(
                 interviewId,
@@ -81,7 +81,7 @@ public class InterviewService {
         InterviewDao.InterviewContext context = lockInterview(interviewId);
         requireRecruiterOrAdmin(context.assignedRecruiterId(), userId, administrator, placementOfficer);
         InterviewStatus previous = context.status();
-        if (!isValidTransition(previous, status, placementOfficer)) {
+        if (!isValidTransition(previous, status, false)) {
             throw conflict("Invalid interview status transition from " + previous + " to " + status);
         }
         if (status == InterviewStatus.CANCELLED && !hasText(reason)) {

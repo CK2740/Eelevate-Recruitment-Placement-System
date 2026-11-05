@@ -157,13 +157,15 @@ class JobApiTest {
     }
 
     @Test
-    void placementOfficerCanViewButCannotManageJobs() throws Exception {
-        given(jobService.getById(8)).willReturn(job(8));
-        AuthenticatedSession authenticated = login("PLACEMENT_OFFICER");
+    void candidateCannotUseRecruiterJobManagementApis() throws Exception {
+        AuthenticatedSession authenticated = login("CANDIDATE");
         CsrfInfo csrf = obtainCsrf(authenticated.session());
 
         mockMvc.perform(get("/api/jobs/8").session(authenticated.session()))
-                .andExpect(status().isOk());
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/jobs").session(authenticated.session()))
+                .andExpect(status().isForbidden());
 
         mockMvc.perform(post("/api/jobs")
                         .session(authenticated.session())
@@ -180,12 +182,38 @@ class JobApiTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jobJson()))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void recruiterCanViewAndManageJobs() throws Exception {
+        given(jobService.getById(8)).willReturn(job(8));
+        AuthenticatedSession authenticated = login("RECRUITER");
+        CsrfInfo csrf = obtainCsrf(authenticated.session());
+
+        mockMvc.perform(get("/api/jobs/8").session(authenticated.session()))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/jobs")
+                        .session(authenticated.session())
+                        .cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jobJson()))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(put("/api/jobs/8")
+                        .session(authenticated.session())
+                        .cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jobJson()))
+                .andExpect(status().isOk());
 
         mockMvc.perform(delete("/api/jobs/8")
                         .session(authenticated.session())
                         .cookie(csrf.cookie())
                         .header(csrf.headerName(), csrf.token()))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isNoContent());
     }
 
     @Test

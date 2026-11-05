@@ -25,5 +25,6 @@ Thumbs.db
 !.env.example
 application-local.properties
 application-secret.properties
+/data/resumes/
 
 *.log

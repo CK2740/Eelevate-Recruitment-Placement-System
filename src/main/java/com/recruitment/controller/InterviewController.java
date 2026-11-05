@@ -61,11 +61,11 @@ public class InterviewController {
                 request,
                 principal.getUserId(),
                 hasRole(principal, "ADMIN"),
-                hasRole(principal, "PLACEMENT_OFFICER"));
+                false);
     }
 
     @GetMapping("/interviews")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public InterviewPageResponse getInterviews(
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String candidate,
@@ -96,7 +96,7 @@ public class InterviewController {
     }
 
     @GetMapping("/interviews/{interviewId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public InterviewResponse getById(
             @PathVariable @Min(1) long interviewId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -104,7 +104,7 @@ public class InterviewController {
                 interviewId,
                 principal.getUserId(),
                 hasRole(principal, "ADMIN"),
-                hasRole(principal, "PLACEMENT_OFFICER"));
+                false);
     }
 
     @PutMapping("/interviews/{interviewId}/schedule")
@@ -121,7 +121,7 @@ public class InterviewController {
     }
 
     @PatchMapping("/interviews/{interviewId}/status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public InterviewResponse updateStatus(
             @PathVariable @Min(1) long interviewId,
             @Valid @RequestBody InterviewStatusRequest request,
@@ -132,11 +132,11 @@ public class InterviewController {
                 request.reason(),
                 principal.getUserId(),
                 hasRole(principal, "ADMIN"),
-                hasRole(principal, "PLACEMENT_OFFICER"));
+                false);
     }
 
     @PutMapping("/interviews/{interviewId}/feedback")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public InterviewResponse submitFeedback(
             @PathVariable @Min(1) long interviewId,
             @RequestBody @NotEmpty List<@Valid InterviewerFeedbackSubmission> submissions,
@@ -146,11 +146,11 @@ public class InterviewController {
                 submissions,
                 principal.getUserId(),
                 hasRole(principal, "ADMIN"),
-                hasRole(principal, "PLACEMENT_OFFICER"));
+                false);
     }
 
     @GetMapping("/interviews/{interviewId}/history")
-    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER', 'PLACEMENT_OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public List<InterviewStatusHistoryResponse> getHistory(
             @PathVariable @Min(1) long interviewId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -158,7 +158,7 @@ public class InterviewController {
                 interviewId,
                 principal.getUserId(),
                 hasRole(principal, "ADMIN"),
-                hasRole(principal, "PLACEMENT_OFFICER"));
+                false);
     }
 
     private static boolean hasRole(UserPrincipal principal, String role) {
