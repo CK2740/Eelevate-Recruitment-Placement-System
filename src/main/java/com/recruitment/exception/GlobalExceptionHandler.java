@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.core.AuthenticationException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -54,6 +55,17 @@ public class GlobalExceptionHandler {
         String error = resolvedStatus == null ? "Request failed" : resolvedStatus.getReasonPhrase();
         String message = exception.getReason() == null ? error : exception.getReason();
         return createError(status, error, message, request, Map.of());
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ApiError> handleAuthenticationException(
+            AuthenticationException exception,
+            HttpServletRequest request) {
+        return createError(
+                HttpStatus.UNAUTHORIZED,
+                "Invalid email or password",
+                request,
+                Map.of());
     }
 
     @ExceptionHandler(Exception.class)

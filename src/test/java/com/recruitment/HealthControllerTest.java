@@ -26,8 +26,8 @@ class HealthControllerTest {
     }
 
     @Test
-    void otherEndpointsAreDeniedUntilAuthenticationIsImplemented() throws Exception {
+    void otherEndpointsRequireAuthentication() throws Exception {
         mockMvc.perform(get("/api/private"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 }
