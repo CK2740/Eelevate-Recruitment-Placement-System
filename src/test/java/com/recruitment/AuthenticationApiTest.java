@@ -1,10 +1,13 @@
 package com.recruitment;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -13,6 +16,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recruitment.dto.AuthenticatedUserResponse;
 import com.recruitment.dto.CreateUserRequest;
+import com.recruitment.dto.PublicAccountType;
+import com.recruitment.dto.PublicRegistrationRequest;
+import com.recruitment.dto.RecruiterApprovalRequest;
+import com.recruitment.dto.RecruiterRegistrationResponse;
+import com.recruitment.dto.UpdateUserRoleRequest;
+import com.recruitment.dto.UserManagementPageResponse;
+import com.recruitment.dto.UserManagementResponse;
+import com.recruitment.model.RoleCode;
 import com.recruitment.security.UserPrincipal;
 import com.recruitment.service.AuditLogService;
 import com.recruitment.service.UserManagementService;
@@ -226,6 +237,59 @@ class AuthenticationApiTest {
     }
 
     @Test
+    void onlyAdminCanListUsersAndAssignSupportedRoles() throws Exception {
+        given(userManagementService.getUsers(0, 20)).willReturn(new UserManagementPageResponse(
+                List.of(
+                        new UserManagementResponse(
+                                9, "candidate@example.com", "Candidate", List.of("CANDIDATE"),
+                                true, "APPROVED", java.time.LocalDateTime.of(2026, 1, 1, 10, 0)),
+                        new UserManagementResponse(
+                                10, "pending@example.com", "Pending Recruiter", List.of("RECRUITER"),
+                                false, "PENDING_APPROVAL", java.time.LocalDateTime.of(2026, 1, 2, 10, 0))),
+                0, 20, 2, 1));
+        given(userManagementService.updateUserRole(
+                9, new UpdateUserRoleRequest(RoleCode.RECRUITER), 7))
+                .willReturn(new UserManagementResponse(
+                        9, "candidate@example.com", "Candidate", List.of("RECRUITER"),
+                        true, "APPROVED", java.time.LocalDateTime.of(2026, 1, 1, 10, 0)));
+
+        MockHttpSession admin = loginAs("admin@example.com", "ADMIN");
+        CsrfInfo adminCsrf = obtainCsrf(admin);
+        mockMvc.perform(get("/api/auth/users").session(admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].roles[0]").value("CANDIDATE"))
+                .andExpect(jsonPath("$.content[0].passwordHash").doesNotExist())
+                .andExpect(jsonPath("$.content[1].accountStatus").value("PENDING_APPROVAL"))
+                .andExpect(jsonPath("$.content[1].active").value(false));
+        mockMvc.perform(patch("/api/auth/users/9/role")
+                        .session(admin)
+                        .cookie(adminCsrf.cookie())
+                        .header(adminCsrf.headerName(), adminCsrf.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"role":"RECRUITER"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles[0]").value("RECRUITER"));
+        verify(userManagementService).updateUserRole(
+                9, new UpdateUserRoleRequest(RoleCode.RECRUITER), 7);
+
+        MockHttpSession recruiter = loginAs("recruiter@example.com", "RECRUITER");
+        CsrfInfo recruiterCsrf = obtainCsrf(recruiter);
+        mockMvc.perform(get("/api/auth/users").session(recruiter))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(patch("/api/auth/users/9/role")
+                        .session(recruiter)
+                        .cookie(recruiterCsrf.cookie())
+                        .header(recruiterCsrf.headerName(), recruiterCsrf.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"role":"ADMIN"}
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void loginRequiresValidEmailAndPasswordFields() throws Exception {
         CsrfInfo csrfInfo = obtainCsrf(null);
         mockMvc.perform(post("/api/auth/login")
@@ -238,6 +302,209 @@ class AuthenticationApiTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.details.email").exists())
                 .andExpect(jsonPath("$.details.password").exists());
+    }
+
+    @Test
+    void publicCandidateRegistrationCreatesCandidateAndAuthenticatesSession() throws Exception {
+        given(userManagementService.registerPublic(any(PublicRegistrationRequest.class)))
+                .willReturn(new AuthenticatedUserResponse(9, "candidate@example.com", "New Candidate", List.of("CANDIDATE")));
+        given(userDetailsService.loadUserByUsername("candidate@example.com"))
+                .willReturn(principal("candidate@example.com", "CANDIDATE", "a-secure-password"));
+        CsrfInfo csrfInfo = obtainCsrf(null);
+
+        MvcResult registration = mockMvc.perform(post("/api/auth/register")
+                        .cookie(csrfInfo.cookie())
+                        .header(csrfInfo.headerName(), csrfInfo.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "accountType":"CANDIDATE",
+                                  "fullName":"New Candidate",
+                                  "email":"candidate@example.com",
+                                  "password":"a-secure-password",
+                                  "confirmPassword":"a-secure-password",
+                                  "role":"ADMIN"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.user.email").value("candidate@example.com"))
+                .andExpect(jsonPath("$.user.roles[0]").value("CANDIDATE"))
+                .andReturn();
+
+        verify(userManagementService).registerPublic(argThat(request ->
+                request.accountType() == PublicAccountType.CANDIDATE
+                        && request.email().equals("candidate@example.com")));
+        MockHttpSession session = (MockHttpSession) registration.getRequest().getSession(false);
+        org.junit.jupiter.api.Assertions.assertNotNull(session);
+        mockMvc.perform(get("/api/auth/me").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles[0]").value("CANDIDATE"));
+    }
+
+    @Test
+    void publicRecruiterRegistrationIsPendingAndDoesNotAuthenticate() throws Exception {
+        given(userManagementService.registerPublic(any(PublicRegistrationRequest.class)))
+                .willReturn(new AuthenticatedUserResponse(10, "new.recruiter@example.com", "New Recruiter", List.of("RECRUITER")));
+        CsrfInfo csrfInfo = obtainCsrf(null);
+        MvcResult result = mockMvc.perform(post("/api/auth/register")
+                        .cookie(csrfInfo.cookie())
+                        .header(csrfInfo.headerName(), csrfInfo.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "accountType":"RECRUITER",
+                                  "fullName":"New Recruiter",
+                                  "email":"new.recruiter@example.com",
+                                  "password":"a-secure-password",
+                                  "confirmPassword":"a-secure-password"
+                                }
+                                """))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.message").value("Your recruiter account is awaiting Admin approval."))
+                .andExpect(jsonPath("$.user").doesNotExist())
+                .andReturn();
+        org.junit.jupiter.api.Assertions.assertNull(result.getRequest().getSession(false));
+        verify(userDetailsService, never()).loadUserByUsername("new.recruiter@example.com");
+    }
+
+    @Test
+    void publicRegistrationRejectsDuplicateEmail() throws Exception {
+        given(userManagementService.registerPublic(any(PublicRegistrationRequest.class)))
+                .willThrow(new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.CONFLICT,
+                        "A user with this email already exists"));
+        CsrfInfo csrfInfo = obtainCsrf(null);
+
+        mockMvc.perform(post("/api/auth/register")
+                        .cookie(csrfInfo.cookie())
+                        .header(csrfInfo.headerName(), csrfInfo.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "accountType":"CANDIDATE",
+                                  "fullName":"Existing User",
+                                  "email":"existing@example.com",
+                                  "password":"a-secure-password",
+                                  "confirmPassword":"a-secure-password"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("A user with this email already exists"));
+    }
+
+    @Test
+    void publicRegistrationRejectsInvalidFieldsAndMismatchedPasswords() throws Exception {
+        CsrfInfo csrfInfo = obtainCsrf(null);
+        mockMvc.perform(post("/api/auth/register")
+                        .cookie(csrfInfo.cookie())
+                        .header(csrfInfo.headerName(), csrfInfo.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "accountType":"CANDIDATE",
+                                  "fullName":"",
+                                  "email":"not-an-email",
+                                  "password":"short",
+                                  "confirmPassword":"different"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/auth/register")
+                        .cookie(csrfInfo.cookie())
+                        .header(csrfInfo.headerName(), csrfInfo.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "accountType":"CANDIDATE",
+                                  "fullName":"New User",
+                                  "email":"new-user@example.com",
+                                  "password":"a-secure-password",
+                                  "confirmPassword":"another-password"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.details.passwordConfirmationValid")
+                        .value("Password confirmation must match password"));
+
+        verify(userManagementService, never()).registerPublic(any(PublicRegistrationRequest.class));
+    }
+
+    @Test
+    void recruiterApprovalEndpointsAreAdminOnly() throws Exception {
+        given(userDetailsService.loadUserByUsername("recruiter@example.com"))
+                .willReturn(principal("recruiter@example.com", "RECRUITER"));
+        CsrfInfo csrf = obtainCsrf(null);
+        MvcResult login = mockMvc.perform(post("/api/auth/login")
+                        .cookie(csrf.cookie()).header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"recruiter@example.com","password":"correct-password"}
+                                """))
+                .andExpect(status().isOk()).andReturn();
+        MockHttpSession session = (MockHttpSession) login.getRequest().getSession(false);
+        CsrfInfo actionCsrf = obtainCsrf(session);
+        mockMvc.perform(get("/api/auth/admin/recruiters/pending").session(session))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/auth/admin/recruiters/10/approval")
+                        .session(session).cookie(actionCsrf.cookie())
+                        .header(actionCsrf.headerName(), actionCsrf.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"APPROVE\"}"))
+                .andExpect(status().isForbidden());
+        verify(userManagementService, never()).reviewRecruiter(any(Long.class), any(Long.class), any());
+    }
+
+    @Test
+    void adminCanReviewRecruiterRequests() throws Exception {
+        given(userDetailsService.loadUserByUsername("admin@example.com"))
+                .willReturn(principal("admin@example.com", "ADMIN"));
+        given(userManagementService.getPendingRecruiters()).willReturn(List.of(
+                new RecruiterRegistrationResponse(10, "pending@example.com", "Pending Recruiter", java.time.LocalDateTime.now())));
+        CsrfInfo csrf = obtainCsrf(null);
+        MvcResult login = mockMvc.perform(post("/api/auth/login")
+                        .cookie(csrf.cookie()).header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"admin@example.com","password":"correct-password"}
+                                """))
+                .andExpect(status().isOk()).andReturn();
+        MockHttpSession session = (MockHttpSession) login.getRequest().getSession(false);
+        CsrfInfo actionCsrf = obtainCsrf(session);
+        mockMvc.perform(get("/api/auth/admin/recruiters/pending").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].email").value("pending@example.com"));
+        mockMvc.perform(post("/api/auth/admin/recruiters/10/approval")
+                        .session(session).cookie(actionCsrf.cookie())
+                        .header(actionCsrf.headerName(), actionCsrf.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"APPROVE\"}"))
+                .andExpect(status().isOk());
+        verify(userManagementService).reviewRecruiter(10L, 7L, RecruiterApprovalRequest.Decision.APPROVE);
+        mockMvc.perform(post("/api/auth/admin/recruiters/11/approval")
+                        .session(session).cookie(actionCsrf.cookie())
+                        .header(actionCsrf.headerName(), actionCsrf.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"REJECT\"}"))
+                .andExpect(status().isOk());
+        verify(userManagementService).reviewRecruiter(11L, 7L, RecruiterApprovalRequest.Decision.REJECT);
+    }
+
+    @Test
+    void pendingAndRejectedRecruiterAccountsCannotLogIn() throws Exception {
+        given(userDetailsService.loadUserByUsername("pending@example.com"))
+                .willReturn(principal("pending@example.com", "RECRUITER", "correct-password", false));
+        given(userDetailsService.loadUserByUsername("rejected@example.com"))
+                .willReturn(principal("rejected@example.com", "RECRUITER", "correct-password", false));
+        for (String email : List.of("pending@example.com", "rejected@example.com")) {
+            CsrfInfo csrf = obtainCsrf(null);
+            mockMvc.perform(post("/api/auth/login")
+                            .cookie(csrf.cookie()).header(csrf.headerName(), csrf.token())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(
+                                    new com.recruitment.dto.LoginRequest(email, "correct-password"))))
+                    .andExpect(status().isUnauthorized());
+        }
     }
 
     private CsrfInfo obtainCsrf(MockHttpSession session) throws Exception {
@@ -254,13 +521,36 @@ class AuthenticationApiTest {
         return new CsrfInfo(body.get("token").asText(), body.get("headerName").asText(), cookie);
     }
 
+    private MockHttpSession loginAs(String email, String role) throws Exception {
+        given(userDetailsService.loadUserByUsername(email)).willReturn(principal(email, role));
+        CsrfInfo csrf = obtainCsrf(null);
+        MvcResult result = mockMvc.perform(post("/api/auth/login")
+                        .cookie(csrf.cookie())
+                        .header(csrf.headerName(), csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"correct-password"}
+                                """.formatted(email)))
+                .andExpect(status().isOk())
+                .andReturn();
+        return (MockHttpSession) result.getRequest().getSession(false);
+    }
+
     private UserPrincipal principal(String email, String role) {
+        return principal(email, role, "correct-password");
+    }
+
+    private UserPrincipal principal(String email, String role, String password) {
+        return principal(email, role, password, true);
+    }
+
+    private UserPrincipal principal(String email, String role, String password, boolean enabled) {
         return new UserPrincipal(
                 7,
                 email,
                 "Test User",
-                passwordEncoder.encode("correct-password"),
-                true,
+                passwordEncoder.encode(password),
+                enabled,
                 List.of(new SimpleGrantedAuthority("ROLE_" + role)));
     }
 
