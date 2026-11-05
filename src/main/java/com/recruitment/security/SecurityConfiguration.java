@@ -82,6 +82,7 @@ public class SecurityConfiguration {
                         .requestMatchers("/api/auth/users/**").hasRole("ADMIN")
                         .requestMatchers("/api/auth/me", "/api/auth/logout").authenticated()
                         .requestMatchers("/api/candidates", "/api/candidates/**").authenticated()
+                        .requestMatchers("/api/companies", "/api/companies/**").authenticated()
                         .anyRequest().denyAll())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
