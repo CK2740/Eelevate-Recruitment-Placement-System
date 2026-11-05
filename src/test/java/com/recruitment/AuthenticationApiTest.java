@@ -1,7 +1,9 @@
 package com.recruitment;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -12,6 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.recruitment.dto.AuthenticatedUserResponse;
 import com.recruitment.dto.CreateUserRequest;
 import com.recruitment.security.UserPrincipal;
+import com.recruitment.service.AuditLogService;
 import com.recruitment.service.UserManagementService;
 import jakarta.servlet.http.Cookie;
 import java.util.List;
@@ -44,6 +47,9 @@ class AuthenticationApiTest {
 
     @MockitoBean
     private UserDetailsService userDetailsService;
+
+    @MockitoBean
+    private AuditLogService auditLogService;
 
     @MockitoBean
     private UserManagementService userManagementService;
@@ -135,6 +141,12 @@ class AuthenticationApiTest {
                         .cookie(logoutCsrf.cookie())
                         .header(logoutCsrf.headerName(), logoutCsrf.token()))
                 .andExpect(status().isNoContent());
+        verify(auditLogService).log(
+                eq(7L),
+                eq("USER_LOGGED_OUT"),
+                eq("AUTHENTICATION"),
+                eq(7L),
+                any());
 
         mockMvc.perform(get("/api/auth/me"))
                 .andExpect(status().isUnauthorized());

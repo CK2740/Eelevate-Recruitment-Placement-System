@@ -1,0 +1,10 @@
+package com.recruitment.dto;
+
+public enum ReportType {
+    RECRUITMENT_FUNNEL,
+    COMPANY_WISE_PLACEMENTS,
+    TECHNOLOGY_WISE_PLACEMENTS,
+    RECRUITER_PERFORMANCE,
+    PENDING_INTERVIEWS,
+    OPEN_JOB_AGING
+}

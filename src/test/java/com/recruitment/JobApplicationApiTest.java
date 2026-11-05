@@ -18,6 +18,7 @@ import com.recruitment.dto.ApplicationStatusHistoryResponse;
 import com.recruitment.dto.ApplicationStatusRequest;
 import com.recruitment.security.UserPrincipal;
 import com.recruitment.service.JobApplicationService;
+import com.recruitment.service.AuditLogService;
 import jakarta.servlet.http.Cookie;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -52,6 +53,9 @@ class JobApplicationApiTest {
 
     @MockitoBean
     private UserDetailsService userDetailsService;
+
+    @MockitoBean
+    private AuditLogService auditLogService;
 
     @MockitoBean
     private JobApplicationService applicationService;

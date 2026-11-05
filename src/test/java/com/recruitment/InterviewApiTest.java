@@ -23,6 +23,7 @@ import com.recruitment.dto.InterviewStatusHistoryResponse;
 import com.recruitment.dto.InterviewerFeedbackResponse;
 import com.recruitment.security.UserPrincipal;
 import com.recruitment.service.InterviewService;
+import com.recruitment.service.AuditLogService;
 import jakarta.servlet.http.Cookie;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -57,6 +58,9 @@ class InterviewApiTest {
 
     @MockitoBean
     private UserDetailsService userDetailsService;
+
+    @MockitoBean
+    private AuditLogService auditLogService;
 
     @MockitoBean
     private InterviewService interviewService;

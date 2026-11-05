@@ -6,6 +6,7 @@ import com.recruitment.dto.CsrfTokenResponse;
 import com.recruitment.dto.LoginRequest;
 import com.recruitment.security.UserPrincipal;
 import com.recruitment.service.AuthenticationService;
+import com.recruitment.service.AuditLogService;
 import com.recruitment.service.UserManagementService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import java.util.Map;
 import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
@@ -31,16 +33,19 @@ import org.springframework.security.access.prepost.PreAuthorize;
 public class AuthenticationController {
 
     private final AuthenticationService authenticationService;
+    private final AuditLogService auditLogService;
     private final UserManagementService userManagementService;
     private final SecurityContextRepository securityContextRepository;
     private final CsrfTokenRepository csrfTokenRepository;
 
     public AuthenticationController(
             AuthenticationService authenticationService,
+            AuditLogService auditLogService,
             UserManagementService userManagementService,
             SecurityContextRepository securityContextRepository,
             CsrfTokenRepository csrfTokenRepository) {
         this.authenticationService = authenticationService;
+        this.auditLogService = auditLogService;
         this.userManagementService = userManagementService;
         this.securityContextRepository = securityContextRepository;
         this.csrfTokenRepository = csrfTokenRepository;
@@ -60,6 +65,12 @@ public class AuthenticationController {
         if (!(authentication.getPrincipal() instanceof UserPrincipal principal)) {
             throw new IllegalStateException("Authenticated principal has an unsupported type");
         }
+        auditLogService.log(
+                principal.getUserId(),
+                "USER_LOGGED_IN",
+                "AUTHENTICATION",
+                principal.getUserId(),
+                Map.of("method", "POST", "path", "/api/auth/login"));
 
         if (servletRequest.getSession(false) != null) {
             servletRequest.changeSessionId();

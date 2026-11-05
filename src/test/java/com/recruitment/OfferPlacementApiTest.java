@@ -26,6 +26,7 @@ import com.recruitment.dto.PlacementStatusHistoryResponse;
 import com.recruitment.security.UserPrincipal;
 import com.recruitment.service.OfferService;
 import com.recruitment.service.PlacementService;
+import com.recruitment.service.AuditLogService;
 import jakarta.servlet.http.Cookie;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -62,6 +63,9 @@ class OfferPlacementApiTest {
 
     @MockitoBean
     private UserDetailsService userDetailsService;
+
+    @MockitoBean
+    private AuditLogService auditLogService;
 
     @MockitoBean
     private OfferService offerService;

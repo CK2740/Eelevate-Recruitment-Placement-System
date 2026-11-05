@@ -20,6 +20,7 @@ import com.recruitment.dto.JobResponse;
 import com.recruitment.dto.JobStatus;
 import com.recruitment.security.UserPrincipal;
 import com.recruitment.service.JobService;
+import com.recruitment.service.AuditLogService;
 import jakarta.servlet.http.Cookie;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -56,6 +57,9 @@ class JobApiTest {
 
     @MockitoBean
     private UserDetailsService userDetailsService;
+
+    @MockitoBean
+    private AuditLogService auditLogService;
 
     @MockitoBean
     private JobService jobService;

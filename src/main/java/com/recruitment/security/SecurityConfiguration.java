@@ -18,6 +18,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
@@ -66,9 +67,18 @@ public class SecurityConfiguration {
     }
 
     @Bean
+    public AuditLoggingFilter auditLoggingFilter(
+            com.recruitment.service.AuditLogService auditLogService,
+            ObjectMapper objectMapper) {
+        return new AuditLoggingFilter(auditLogService, objectMapper);
+    }
+
+    @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             ObjectMapper objectMapper,
+            AuditLoggingFilter auditLoggingFilter,
+            com.recruitment.service.AuditLogService auditLogService,
             SecurityContextRepository securityContextRepository,
             CsrfTokenRepository csrfTokenRepository) throws Exception {
         http
@@ -88,6 +98,9 @@ public class SecurityConfiguration {
                         .requestMatchers("/api/interviews", "/api/interviews/**").authenticated()
                         .requestMatchers("/api/offers", "/api/offers/**").authenticated()
                         .requestMatchers("/api/placements", "/api/placements/**").authenticated()
+                        .requestMatchers("/api/dashboard", "/api/dashboard/**").authenticated()
+                        .requestMatchers("/api/reports", "/api/reports/**").authenticated()
+                        .requestMatchers("/api/audit-logs", "/api/audit-logs/**").authenticated()
                         .anyRequest().denyAll())
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
@@ -106,12 +119,22 @@ public class SecurityConfiguration {
                                         response,
                                         HttpStatus.FORBIDDEN,
                                         "Access is denied")));
+        http.addFilterAfter(auditLoggingFilter, AuthorizationFilter.class);
         http.logout(logout -> logout
                 .logoutUrl("/api/auth/logout")
                 .invalidateHttpSession(true)
                 .clearAuthentication(true)
                 .deleteCookies("JSESSIONID")
                 .logoutSuccessHandler((request, response, authentication) -> {
+                    if (authentication != null
+                            && authentication.getPrincipal() instanceof UserPrincipal principal) {
+                        auditLogService.log(
+                                principal.getUserId(),
+                                "USER_LOGGED_OUT",
+                                "AUTHENTICATION",
+                                principal.getUserId(),
+                                Map.of("method", "POST", "path", "/api/auth/logout"));
+                    }
                     csrfTokenRepository.saveToken(null, request, response);
                     response.setStatus(HttpStatus.NO_CONTENT.value());
                 }));

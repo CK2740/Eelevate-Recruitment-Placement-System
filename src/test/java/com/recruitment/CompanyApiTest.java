@@ -3,6 +3,7 @@ package com.recruitment;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -18,6 +19,7 @@ import com.recruitment.dto.CompanyResponse;
 import com.recruitment.dto.CompanyStatus;
 import com.recruitment.security.UserPrincipal;
 import com.recruitment.service.CompanyService;
+import com.recruitment.service.AuditLogService;
 import jakarta.servlet.http.Cookie;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -54,6 +56,9 @@ class CompanyApiTest {
     private UserDetailsService userDetailsService;
 
     @MockitoBean
+    private AuditLogService auditLogService;
+
+    @MockitoBean
     private CompanyService companyService;
 
     @Test
@@ -76,6 +81,8 @@ class CompanyApiTest {
                         .content(companyJson()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.companyId").value(5));
+        verify(auditLogService).log(
+                eq(7L), eq("COMPANY_CREATED"), eq("COMPANY"), eq(5L), any());
 
         mockMvc.perform(get("/api/companies/5").session(authenticated.session()))
                 .andExpect(status().isOk())
