@@ -89,6 +89,8 @@ public class SecurityConfiguration {
                         .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/health", "/api/auth/csrf", "/api/auth/login").permitAll()
+                        .requestMatchers("/", "/index.html", "/assets/**")
+                        .permitAll()
                         .requestMatchers("/api/auth/users/**").hasRole("ADMIN")
                         .requestMatchers("/api/auth/me", "/api/auth/logout").authenticated()
                         .requestMatchers("/api/candidates", "/api/candidates/**").authenticated()
