@@ -68,6 +68,19 @@ com.recruitment
 
 The React + Vite frontend is in `frontend/`; its production build is served from Spring Boot's static resources. The role shown by the UI never determines backend permissions.
 
+## Deploy on Render with Docker
+
+Create a Render Web Service for this repository and select the Docker runtime. The root `Dockerfile` builds the React frontend, packages it into the Spring Boot application, and runs it on Java 21 as a non-root user. The application listens on Render's `PORT` environment variable and defaults to port `8080` for local or standalone container use.
+
+Configure deployment-specific values in the Render dashboard, not in the Dockerfile or repository:
+
+- `DB_URL`: JDBC URL for a reachable MySQL database, such as `jdbc:mysql://<mysql-host>:3306/recruitment_db?serverTimezone=UTC`
+- `DB_USERNAME` and `DB_PASSWORD`: MySQL credentials
+- `FLYWAY_ENABLED`: keep `true` to apply schema migrations at startup
+- `SESSION_COOKIE_SECURE`: keep `true` for HTTPS deployments
+
+Do not use `localhost` as the database host unless MySQL runs in the same container. If candidate resume uploads are enabled, attach persistent storage and set `CANDIDATE_RESUME_STORAGE_DIR` to its writable mount path; container-local files are not durable across redeployments.
+
 ## Authentication setup
 
 The authentication API uses a server-managed session. Obtain a CSRF token from `GET /api/auth/csrf` before sending registration, login, logout, or user-creation requests. Send the returned token in the response's `headerName` header and retain cookies. Session cookies are HttpOnly, SameSite=Lax, and Secure by default; for local HTTP development only, set `$env:SESSION_COOKIE_SECURE = "false"`.
