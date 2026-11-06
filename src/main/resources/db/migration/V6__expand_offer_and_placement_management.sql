@@ -1,6 +1,6 @@
 ALTER TABLE offers
     ADD COLUMN expiry_date DATE NULL AFTER offer_date,
-    ADD COLUMN offer_details TEXT NULL AFTER expiry_date,
+    ADD COLUMN offer_details TEXT NULL,
     MODIFY COLUMN status ENUM(
         'DRAFT', 'ISSUED', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'WITHDRAWN',
         'PENDING', 'REJECTED'
