@@ -151,27 +151,29 @@ function InterviewScheduleModal({ onClose, onSaved }) {
   const [interviewers, setInterviewers] = useState([{ id: 1 }]);
   async function submit(event) {
     event.preventDefault(); setBusy(true); setError("");
-    const form = new FormData(event.currentTarget);
-    const applicationId = Number(form.get("applicationId"));
-    const body = {
-      applicationId,
-      interviewRound: form.get("interviewRound").trim(),
-      interviewType: form.get("interviewType"),
-      roundNumber: Number(form.get("roundNumber")),
-      scheduledAt: `${form.get("scheduledAt")}:00`,
-      durationMinutes: Number(form.get("durationMinutes")),
-      interviewMode: form.get("interviewMode"),
-      location: form.get("location").trim() || null,
-      meetingLink: form.get("meetingLink").trim() || null,
-      interviewers: interviewers.map(({ id }) => ({
-        name: form.get(`interviewerName${id}`).trim(),
-        email: form.get(`interviewerEmail${id}`).trim() || null,
-      })),
-    };
     try {
+      const form = new FormData(event.currentTarget);
+      const applicationId = Number(form.get("applicationId"));
+      const body = {
+        applicationId,
+        interviewRound: form.get("interviewRound").trim(),
+        interviewType: form.get("interviewType"),
+        roundNumber: Number(form.get("roundNumber")),
+        scheduledAt: `${form.get("scheduledAt")}:00`,
+        durationMinutes: Number(form.get("durationMinutes")),
+        interviewMode: form.get("interviewMode"),
+        location: String(form.get("location") ?? "").trim() || null,
+        meetingLink: String(form.get("meetingLink") ?? "").trim() || null,
+        interviewers: interviewers.map(({ id }) => ({
+          name: form.get(`interviewerName${id}`).trim(),
+          email: form.get(`interviewerEmail${id}`).trim() || null,
+        })),
+      };
       await api.post(`/applications/${applicationId}/interviews`, body);
       onSaved(); onClose();
-    } catch (requestError) { setError(requestError.message); }
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Could not schedule interview.");
+    }
     finally { setBusy(false); }
   }
   return <Modal title="Schedule an interview" onClose={onClose}>
