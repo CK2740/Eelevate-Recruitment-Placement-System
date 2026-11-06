@@ -1,3 +1,3 @@
 ALTER TABLE jobs
-    ADD COLUMN job_description TEXT NULL AFTER package_amount,
-    ADD COLUMN skills TEXT NULL AFTER job_description;
+    ADD COLUMN job_description TEXT NULL,
+    ADD COLUMN skills TEXT NULL;
