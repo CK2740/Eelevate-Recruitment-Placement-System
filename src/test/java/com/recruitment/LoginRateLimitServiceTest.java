@@ -26,6 +26,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -35,11 +38,13 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.server.ResponseStatusException;
 
+@ExtendWith(OutputCaptureExtension.class)
 class LoginRateLimitServiceTest {
 
     private MutableClock clock;
     private AtomicBoolean credentialsAccepted;
     private LoginRateLimitService loginRateLimitService;
+    private JdbcTemplate jdbcTemplate;
 
     @BeforeEach
     void setUp() {
@@ -49,7 +54,7 @@ class LoginRateLimitServiceTest {
         dataSource.setUser("sa");
         dataSource.setPassword("");
 
-        JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
+        jdbcTemplate = new JdbcTemplate(dataSource);
         jdbcTemplate.execute("""
                 CREATE TABLE login_attempt_tracking (
                     identifier_type VARCHAR(8) NOT NULL,
@@ -93,6 +98,52 @@ class LoginRateLimitServiceTest {
 
         assertNotNull(authentication);
         assertEquals("ROLE_CANDIDATE", authentication.getAuthorities().iterator().next().getAuthority());
+    }
+
+    @Test
+    void successfulAuthenticationLogsLimiterOperationsAndTransactionDurations(CapturedOutput output) {
+        credentialsAccepted.set(true);
+        String email = "instrumentation@example.com";
+        String password = "instrumentation-password";
+        String ipAddress = "192.0.2.87";
+
+        loginRateLimitService.authenticate(new LoginRequest(email, password), ipAddress);
+
+        for (String operation : new String[] {
+                "ip_limiter_insert_attempt",
+                "ip_limiter_select_for_update",
+                "email_limiter_insert_attempt",
+                "email_limiter_select_for_update",
+                "ip_limiter_cleanup_delete",
+                "email_limiter_cleanup_delete",
+                "rate_limit_transaction_body",
+                "rate_limit_transaction_total"
+        }) {
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    output.getOut().contains("operation=" + operation + " duration_ms="),
+                    "Missing duration for " + operation);
+        }
+        org.junit.jupiter.api.Assertions.assertFalse(output.getOut().contains(email));
+        org.junit.jupiter.api.Assertions.assertFalse(output.getOut().contains(password));
+        org.junit.jupiter.api.Assertions.assertFalse(output.getOut().contains(ipAddress));
+    }
+
+    @Test
+    void failedTransactionLogsBodyAndTotalDurations(CapturedOutput output) {
+        jdbcTemplate.execute("DROP TABLE login_attempt_tracking");
+
+        assertThrows(
+                org.springframework.dao.DataAccessException.class,
+                () -> loginRateLimitService.authenticate(
+                        new LoginRequest("failure@example.com", "failure-password"),
+                        "192.0.2.88"));
+
+        org.junit.jupiter.api.Assertions.assertTrue(
+                output.getOut().contains("operation=ip_limiter_insert_attempt duration_ms="));
+        org.junit.jupiter.api.Assertions.assertTrue(
+                output.getOut().contains("operation=rate_limit_transaction_body duration_ms="));
+        org.junit.jupiter.api.Assertions.assertTrue(
+                output.getOut().contains("operation=rate_limit_transaction_total duration_ms="));
     }
 
     @Test
