@@ -1,6 +1,7 @@
 package com.recruitment.service;
 
 import com.recruitment.dto.LoginRequest;
+import com.recruitment.util.LoginPerformanceMetrics;
 import java.util.Locale;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -21,10 +22,15 @@ public class AuthenticationService {
 
     public Authentication authenticate(LoginRequest request) {
         try {
-            return authenticationManager.authenticate(
-                    UsernamePasswordAuthenticationToken.unauthenticated(
-                            request.email().trim().toLowerCase(Locale.ROOT),
-                            request.password()));
+            long startedAt = LoginPerformanceMetrics.startTimer();
+            try {
+                return authenticationManager.authenticate(
+                        UsernamePasswordAuthenticationToken.unauthenticated(
+                                request.email().trim().toLowerCase(Locale.ROOT),
+                                request.password()));
+            } finally {
+                LoginPerformanceMetrics.logDuration("authentication_manager", startedAt);
+            }
         } catch (AuthenticationException exception) {
             throw new ResponseStatusException(
                     HttpStatus.UNAUTHORIZED,

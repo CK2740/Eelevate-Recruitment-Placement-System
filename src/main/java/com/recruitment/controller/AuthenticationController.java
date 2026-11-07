@@ -16,6 +16,7 @@ import com.recruitment.service.AuthenticationService;
 import com.recruitment.service.AuditLogService;
 import com.recruitment.service.LoginRateLimitService;
 import com.recruitment.service.UserManagementService;
+import com.recruitment.util.LoginPerformanceMetrics;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -81,9 +82,14 @@ public class AuthenticationController {
             @Valid @RequestBody LoginRequest request,
             HttpServletRequest servletRequest,
             HttpServletResponse servletResponse) {
-        Authentication authentication = loginRateLimitService.authenticate(
-                request, servletRequest.getRemoteAddr());
-        return establishSession(authentication, servletRequest, servletResponse, "/api/auth/login");
+        long startedAt = LoginPerformanceMetrics.startTimer();
+        try {
+            Authentication authentication = loginRateLimitService.authenticate(
+                    request, servletRequest.getRemoteAddr());
+            return establishSession(authentication, servletRequest, servletResponse, "/api/auth/login");
+        } finally {
+            LoginPerformanceMetrics.logDuration("controller_total", startedAt);
+        }
     }
 
     @PostMapping("/register")
@@ -119,15 +125,25 @@ public class AuthenticationController {
                 principal.getUserId(),
                 Map.of("method", "POST", "path", path));
 
-        if (servletRequest.getSession(false) != null) {
-            servletRequest.changeSessionId();
+        long startedAt = LoginPerformanceMetrics.startTimer();
+        try {
+            if (servletRequest.getSession(false) != null) {
+                servletRequest.changeSessionId();
+            }
+            SecurityContext context = SecurityContextHolder.createEmptyContext();
+            context.setAuthentication(authentication);
+            SecurityContextHolder.setContext(context);
+            long saveStartedAt = LoginPerformanceMetrics.startTimer();
+            try {
+                securityContextRepository.saveContext(context, servletRequest, servletResponse);
+            } finally {
+                LoginPerformanceMetrics.logDuration("security_context_save", saveStartedAt);
+            }
+            csrfTokenRepository.saveToken(null, servletRequest, servletResponse);
+            return AuthenticatedUserResponse.from(principal);
+        } finally {
+            LoginPerformanceMetrics.logDuration("session_establishment", startedAt);
         }
-        SecurityContext context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(authentication);
-        SecurityContextHolder.setContext(context);
-        securityContextRepository.saveContext(context, servletRequest, servletResponse);
-        csrfTokenRepository.saveToken(null, servletRequest, servletResponse);
-        return AuthenticatedUserResponse.from(principal);
     }
 
     private static UserPrincipal requireUserPrincipal(Authentication authentication) {

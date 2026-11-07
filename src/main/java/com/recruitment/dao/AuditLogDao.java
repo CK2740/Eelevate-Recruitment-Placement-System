@@ -1,5 +1,6 @@
 package com.recruitment.dao;
 
+import com.recruitment.util.LoginPerformanceMetrics;
 import com.recruitment.dto.AuditLogPageResponse;
 import com.recruitment.dto.AuditLogResponse;
 import java.sql.Timestamp;
@@ -24,10 +25,18 @@ public class AuditLogDao {
             String entityType,
             Long entityId,
             String detailsJson) {
-        jdbcTemplate.update("""
-                INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values)
-                VALUES (?, ?, ?, ?, ?)
-                """, userId, action, entityType, entityId, detailsJson);
+        boolean loginAudit = "USER_LOGGED_IN".equals(action);
+        long startedAt = loginAudit ? LoginPerformanceMetrics.startTimer() : 0L;
+        try {
+            jdbcTemplate.update("""
+                    INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values)
+                    VALUES (?, ?, ?, ?, ?)
+                    """, userId, action, entityType, entityId, detailsJson);
+        } finally {
+            if (loginAudit) {
+                LoginPerformanceMetrics.logDuration("login_audit_insert", startedAt);
+            }
+        }
     }
 
     public AuditLogPageResponse find(

@@ -1,5 +1,6 @@
 package com.recruitment.security;
 
+import com.recruitment.util.LoginPerformanceMetrics;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
@@ -41,17 +42,26 @@ public class JdbcUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
         UserPrincipal user;
+        long userLookupStartedAt = LoginPerformanceMetrics.startTimer();
         try {
             user = jdbcTemplate.queryForObject(USER_QUERY, USER_ROW_MAPPER, normalizedEmail);
         } catch (org.springframework.dao.EmptyResultDataAccessException exception) {
             throw new UsernameNotFoundException("User not found", exception);
+        } finally {
+            LoginPerformanceMetrics.logDuration("user_lookup", userLookupStartedAt);
         }
 
-        List<GrantedAuthority> authorities = jdbcTemplate.query(
-                ROLE_QUERY,
-                (resultSet, rowNumber) ->
-                        new SimpleGrantedAuthority("ROLE_" + resultSet.getString("role_code")),
-                user.getUserId());
+        long roleLookupStartedAt = LoginPerformanceMetrics.startTimer();
+        List<GrantedAuthority> authorities;
+        try {
+            authorities = jdbcTemplate.query(
+                    ROLE_QUERY,
+                    (resultSet, rowNumber) ->
+                            new SimpleGrantedAuthority("ROLE_" + resultSet.getString("role_code")),
+                    user.getUserId());
+        } finally {
+            LoginPerformanceMetrics.logDuration("role_lookup", roleLookupStartedAt);
+        }
         return new UserPrincipal(
                 user.getUserId(),
                 user.getUsername(),

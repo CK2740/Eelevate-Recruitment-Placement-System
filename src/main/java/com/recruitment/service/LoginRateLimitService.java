@@ -3,6 +3,7 @@ package com.recruitment.service;
 import com.recruitment.dao.LoginAttemptDao;
 import com.recruitment.dao.LoginAttemptDao.AttemptState;
 import com.recruitment.dto.LoginRequest;
+import com.recruitment.util.LoginPerformanceMetrics;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -50,8 +51,14 @@ public class LoginRateLimitService {
         byte[] ipHash = hash(remoteAddress);
         LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
 
-        Outcome outcome = transactionTemplate.execute(status ->
-                authenticateWithinTransaction(request, ipHash, emailHash, now));
+        long transactionStartedAt = LoginPerformanceMetrics.startTimer();
+        Outcome outcome;
+        try {
+            outcome = transactionTemplate.execute(status ->
+                    authenticateWithinTransaction(request, ipHash, emailHash, now));
+        } finally {
+            LoginPerformanceMetrics.logDuration("rate_limit_transaction", transactionStartedAt);
+        }
         if (outcome.rateLimited()) {
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, RATE_LIMIT_MESSAGE);
         }
@@ -66,8 +73,20 @@ public class LoginRateLimitService {
             byte[] ipHash,
             byte[] emailHash,
             LocalDateTime now) {
-        AttemptState ipState = loginAttemptDao.lock(IP, ipHash, now);
-        AttemptState emailState = loginAttemptDao.lock(EMAIL, emailHash, now);
+        long ipLockStartedAt = LoginPerformanceMetrics.startTimer();
+        AttemptState ipState;
+        try {
+            ipState = loginAttemptDao.lock(IP, ipHash, now);
+        } finally {
+            LoginPerformanceMetrics.logDuration("ip_limiter_lock", ipLockStartedAt);
+        }
+        long emailLockStartedAt = LoginPerformanceMetrics.startTimer();
+        AttemptState emailState;
+        try {
+            emailState = loginAttemptDao.lock(EMAIL, emailHash, now);
+        } finally {
+            LoginPerformanceMetrics.logDuration("email_limiter_lock", emailLockStartedAt);
+        }
 
         if (isBlocked(ipState, now) || isBlocked(emailState, now)) {
             return Outcome.blocked();
@@ -78,8 +97,13 @@ public class LoginRateLimitService {
 
         try {
             Authentication authentication = authenticationService.authenticate(request);
-            loginAttemptDao.clear(EMAIL, emailHash);
-            loginAttemptDao.clearIfNoFailures(IP, ipHash);
+            long cleanupStartedAt = LoginPerformanceMetrics.startTimer();
+            try {
+                loginAttemptDao.clear(EMAIL, emailHash);
+                loginAttemptDao.clearIfNoFailures(IP, ipHash);
+            } finally {
+                LoginPerformanceMetrics.logDuration("successful_limiter_cleanup", cleanupStartedAt);
+            }
             return Outcome.authenticated(authentication);
         } catch (ResponseStatusException exception) {
             if (exception.getStatusCode().value() != HttpStatus.UNAUTHORIZED.value()) {
