@@ -1,18 +1,20 @@
 package com.recruitment;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.recruitment.dao.LoginAttemptDao;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.function.Executable;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -28,10 +30,8 @@ class LoginRateLimitInstrumentationTest {
                 .when(insertJdbcTemplate).update(contains("INSERT"), any(Object[].class));
         LoginAttemptDao insertDao = new LoginAttemptDao(insertJdbcTemplate);
 
-        assertThrows(IllegalStateException.class, () ->
-                insertDao.lock("IP", new byte[32], LocalDateTime.now()));
-        assertThrows(IllegalStateException.class, () ->
-                insertDao.lock("EMAIL", new byte[32], LocalDateTime.now()));
+        assertDatabaseFailure(() -> insertDao.lock("IP", new byte[32], LocalDateTime.now()));
+        assertDatabaseFailure(() -> insertDao.lock("EMAIL", new byte[32], LocalDateTime.now()));
 
         JdbcTemplate selectJdbcTemplate = mock(JdbcTemplate.class);
         when(selectJdbcTemplate.update(anyString(), any(Object[].class))).thenReturn(1);
@@ -39,24 +39,20 @@ class LoginRateLimitInstrumentationTest {
                 .when(selectJdbcTemplate)
                 .queryForObject(
                         contains("SELECT"),
-                        any(RowMapper.class),
+                        org.mockito.ArgumentMatchers.<RowMapper<LoginAttemptDao.AttemptState>>any(),
                         any(Object[].class));
         LoginAttemptDao selectDao = new LoginAttemptDao(selectJdbcTemplate);
 
-        assertThrows(IllegalStateException.class, () ->
-                selectDao.lock("IP", new byte[32], LocalDateTime.now()));
-        assertThrows(IllegalStateException.class, () ->
-                selectDao.lock("EMAIL", new byte[32], LocalDateTime.now()));
+        assertDatabaseFailure(() -> selectDao.lock("IP", new byte[32], LocalDateTime.now()));
+        assertDatabaseFailure(() -> selectDao.lock("EMAIL", new byte[32], LocalDateTime.now()));
 
         JdbcTemplate cleanupJdbcTemplate = mock(JdbcTemplate.class);
         doThrow(new IllegalStateException("database failure"))
                 .when(cleanupJdbcTemplate).update(contains("DELETE"), any(Object[].class));
         LoginAttemptDao cleanupDao = new LoginAttemptDao(cleanupJdbcTemplate);
 
-        assertThrows(IllegalStateException.class, () ->
-                cleanupDao.clear("EMAIL", new byte[32]));
-        assertThrows(IllegalStateException.class, () ->
-                cleanupDao.clearIfNoFailures("IP", new byte[32]));
+        assertDatabaseFailure(() -> cleanupDao.clear("EMAIL", new byte[32]));
+        assertDatabaseFailure(() -> cleanupDao.clearIfNoFailures("IP", new byte[32]));
 
         for (String operation : new String[] {
                 "ip_limiter_insert_attempt",
@@ -73,5 +69,10 @@ class LoginRateLimitInstrumentationTest {
         assertTrue(
                 !output.getOut().contains("192.0.2.") && !output.getOut().contains("@example.com"),
                 "Timing output must not contain request identifiers");
+    }
+
+    private static void assertDatabaseFailure(Executable operation) {
+        IllegalStateException exception = assertThrows(IllegalStateException.class, operation);
+        assertEquals("database failure", exception.getMessage());
     }
 }

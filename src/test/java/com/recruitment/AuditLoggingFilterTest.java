@@ -82,7 +82,7 @@ class AuditLoggingFilterTest {
         });
 
         assertEquals("{\"jobId\":42}", response.getContentAsString());
-        var details = org.mockito.ArgumentCaptor.forClass(Map.class);
+        org.mockito.ArgumentCaptor<Map<String, ?>> details = org.mockito.ArgumentCaptor.captor();
         verify(auditLogService).log(
                 eq(17L),
                 eq("JOB_CREATED"),

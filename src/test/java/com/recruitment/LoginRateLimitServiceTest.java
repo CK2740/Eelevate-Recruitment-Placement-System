@@ -117,7 +117,9 @@ class LoginRateLimitServiceTest {
                 "ip_limiter_cleanup_delete",
                 "email_limiter_cleanup_delete",
                 "rate_limit_transaction_body",
-                "rate_limit_transaction_total"
+                "rate_limit_transaction_total",
+                "rate_limit_transaction_begin_setup",
+                "rate_limit_transaction_commit_completion"
         }) {
             org.junit.jupiter.api.Assertions.assertTrue(
                     output.getOut().contains("operation=" + operation + " duration_ms="),
@@ -144,6 +146,10 @@ class LoginRateLimitServiceTest {
                 output.getOut().contains("operation=rate_limit_transaction_body duration_ms="));
         org.junit.jupiter.api.Assertions.assertTrue(
                 output.getOut().contains("operation=rate_limit_transaction_total duration_ms="));
+        org.junit.jupiter.api.Assertions.assertTrue(
+                output.getOut().contains("operation=rate_limit_transaction_begin_setup duration_ms="));
+        org.junit.jupiter.api.Assertions.assertTrue(
+                output.getOut().contains("operation=rate_limit_transaction_rollback_completion duration_ms="));
     }
 
     @Test

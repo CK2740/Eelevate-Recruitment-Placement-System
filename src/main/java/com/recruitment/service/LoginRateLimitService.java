@@ -4,6 +4,7 @@ import com.recruitment.dao.LoginAttemptDao;
 import com.recruitment.dao.LoginAttemptDao.AttemptState;
 import com.recruitment.dto.LoginRequest;
 import com.recruitment.util.LoginPerformanceMetrics;
+import com.recruitment.util.LoginTransactionTimingListener;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -11,17 +12,23 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Locale;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionExecutionListener;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class LoginRateLimitService {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(LoginRateLimitService.class);
     private static final String IP = "IP";
     private static final String EMAIL = "EMAIL";
     private static final int MAX_FAILURES = 5;
@@ -32,6 +39,7 @@ public class LoginRateLimitService {
     private final LoginAttemptDao loginAttemptDao;
     private final AuthenticationService authenticationService;
     private final TransactionTemplate transactionTemplate;
+    private final LoginTransactionTimingListener transactionTimingListener;
     private final Clock clock;
 
     public LoginRateLimitService(
@@ -42,6 +50,15 @@ public class LoginRateLimitService {
         this.loginAttemptDao = loginAttemptDao;
         this.authenticationService = authenticationService;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.transactionTimingListener = new LoginTransactionTimingListener();
+        if (transactionManager instanceof AbstractPlatformTransactionManager abstractTransactionManager) {
+            ArrayList<TransactionExecutionListener> listeners =
+                    new ArrayList<>(abstractTransactionManager.getTransactionExecutionListeners());
+            listeners.add(transactionTimingListener);
+            abstractTransactionManager.setTransactionExecutionListeners(listeners);
+        } else {
+            LOGGER.warn("Login transaction lifecycle timing is unavailable for the configured manager type");
+        }
         this.clock = clock;
     }
 
@@ -53,18 +70,20 @@ public class LoginRateLimitService {
 
         long transactionStartedAt = LoginPerformanceMetrics.startTimer();
         Outcome outcome;
-        try {
-            outcome = transactionTemplate.execute(status -> {
-                long transactionBodyStartedAt = LoginPerformanceMetrics.startTimer();
-                try {
-                    return authenticateWithinTransaction(request, ipHash, emailHash, now);
-                } finally {
-                    LoginPerformanceMetrics.logDuration(
-                            "rate_limit_transaction_body", transactionBodyStartedAt);
-                }
-            });
-        } finally {
-            LoginPerformanceMetrics.logDuration("rate_limit_transaction_total", transactionStartedAt);
+        try (LoginTransactionTimingListener.Scope ignored = transactionTimingListener.start()) {
+            try {
+                outcome = transactionTemplate.execute(status -> {
+                    long transactionBodyStartedAt = LoginPerformanceMetrics.startTimer();
+                    try {
+                        return authenticateWithinTransaction(request, ipHash, emailHash, now);
+                    } finally {
+                        LoginPerformanceMetrics.logDuration(
+                                "rate_limit_transaction_body", transactionBodyStartedAt);
+                    }
+                });
+            } finally {
+                LoginPerformanceMetrics.logDuration("rate_limit_transaction_total", transactionStartedAt);
+            }
         }
         if (outcome.rateLimited()) {
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, RATE_LIMIT_MESSAGE);
